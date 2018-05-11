@@ -17,8 +17,8 @@
                                               ('ledna #'ledna-blocker-function)
                                               ('emacs-lisp #'ledna-blocker-function-emacs-lisp)))
 
-    (advice-add 'ledna-trigger-function :around #'ledna-dsl-specifier-trigger)
-    (advice-add 'ledna-blocker-function :around #'ledna-dsl-specifier-blocker)))
+    (advice-add 'org-edna-trigger-function :around #'ledna-dsl-specifier-trigger)
+    (advice-add 'org-edna-blocker-function :around #'ledna-dsl-specifier-blocker)))
 
 (defun ledna-dsl-specifier-trigger (orig-fun &rest args)
   "Wrap edna's triggers.
@@ -38,8 +38,8 @@ ORIG-FUN is a blocker function called with ARGS."
 See `emacs-edna-run' for CHANGE-PLIST explanation.
 
 This shouldn't be run from outside of `org-trigger-hook'."
-  (ledna-run change-plist
-             (-when-let* ((form (org-entry-get (point) "TRIGGER" ledna-use-inheritance)))
+  (org-edna-run change-plist
+             (-when-let* ((form (org-entry-get (point) "TRIGGER" org-edna-use-inheritance)))
                (eval (read form)))))
 
 (defun ledna-blocker-function-emacs-lisp (change-plist)
@@ -48,12 +48,16 @@ This shouldn't be run from outside of `org-trigger-hook'."
 See `emacs-edna-run' for CHANGE-PLIST explanation.
 
 This shouldn't be run from outside of `org-trigger-hook'."
-  (ledna-run change-plist
-             (if-let* ((form (org-entry-get pos "BLOCKER" ledna-use-inheritance)))
+  (org-edna-run change-plist
+             (if-let* ((form (org-entry-get pos "BLOCKER" org-edna-use-inheritance)))
                  ;; Return nil if there is no blocking entry
                  (not (setq org-block-entry-blocking (eval (read form))))
                t)))
 #+END_SRC
+
+#+RESULTS:
+: ledna-blocker-function-emacs-lisp
+
 * Reports
 #+BEGIN_SRC emacs-lisp
 (defun ledna-price-counter (&optional target currency)
@@ -102,21 +106,29 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 ;;        :state "TODO"
 ;;        :properties '(SCHEDULE TRIGGER)
 ;;        :insert-after (self))
+;; (and (ledna-clone) (ledna-insert (org-entry-create "English Hometask" :todo "TODO" :tags "Hometask")) :after (self))
 
-(defun ledna-clone ()
-  (let* ((props (org-entry-properties))
-         (ignored-keys '("CLOSED" "TIMESTAMP_IA" "TODO" "FILE" "ITEM")))
+(defun ledna-clone (&rest args)
+  (let* ((source (or (plist-get args :source) (self)))
+         (todo-state (or (plist-get args :todo-state) "TODO"))
+         (target-properties (or (plist-get args :properties) ()))
+         (insert-after (or (plist-get args :insert-after) (self)))
+         (archive-source-p (or (plist-get args :archive) nil))
+         (source-properties (org-entry-properties)))
 
     (org-insert-heading-respect-content)
-    (insert (cdr (assoc-string "ITEM" props)))
-    (set-todo-state "TODO")
+    (insert (cdr (assoc-string "ITEM" source-properties)))
+    (set-todo-state todo-state)
+    (mapc #'(lambda (property)
+              (let ((p (assoc-string property source-properties)))
+                (org-set-property
+                 (car p) (cdr p)))) target-properties)
 
-    ;; clone properties
-    (mapc #'(lambda (prop)
-              (let ((key (car prop))
-                    (val (cdr prop)))
-                (when (not (-elem-indices key ignored-keys))
-                  (org-set-property key val)))) props)
+    (when archive-source-p
+      (mapc #'(lambda (marker)
+                (save-excursion
+                  (org-goto-marker-or-bmk marker)
+                  (org-archive-subtree))) source))
 
     ;; TODO: customize possibility
     (ledna-advanced-schedule)))
