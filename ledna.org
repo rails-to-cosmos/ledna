@@ -1,7 +1,8 @@
 #+CATEGORY: ledna
 #+PROPERTY: header-args:emacs-lisp :tangle ledna.el
 
-* Wrapper
+* Core
+** Wrapper
 #+BEGIN_SRC emacs-lisp
 (defun ledna-dsl-init (&optional dsl)
   (let ((dsl (or dsl 'ledna)))
@@ -57,39 +58,7 @@ This shouldn't be run from outside of `org-trigger-hook'."
 
 #+RESULTS:
 : ledna-blocker-function-emacs-lisp
-
-* Reports
-#+BEGIN_SRC emacs-lisp
-(defun ledna-price-counter (&optional target currency)
-  (when-let (price (get-property "PRICE"))
-    (inc-property "MONEY-SPENT" price (or currency "RUB") target)))
-
-(defun ledna-time-counter (&optional target)
-  (when-let (duration (get-property "DURATION"))
-    (inc-property "TIME-SPENT" duration "hours" target)
-    (inc-property "TIMES" 1 "times" target)))
-
-(defun ledna-advanced-schedule (&optional target)
-  (when-let (schedule-prop (get-property "SCHEDULE"))
-    (let* ((schedule (cadr (read schedule-prop)))
-           (next-time (get-nearest-date schedule)))
-      (set-scheduled next-time target)
-      (set-todo-state "TODO" target)
-      (org-entry-put nil "LAST_REPEAT" (format-time-string
-					      (org-time-stamp-format t t)
-					      (current-time))))))
-
-(defun ledna-money-time-report ()
-  (when (string= (get-todo-state) "DONE")
-    (ledna-time-counter)
-    (ledna-price-counter))
-  (ledna-advanced-schedule))
-
-(defun ledna-touch (&optional target)
-  (set-scheduled (active-timestamp "now") target)
-  (set-todo-state "TODO" target))
-#+END_SRC
-* Utils
+** Utils
 #+BEGIN_SRC emacs-lisp
 (defun string-is-numeric-p (string)
   "Return non-nil if STRING is a valid numeric string.
@@ -99,7 +68,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
 #+END_SRC
-* Entry Manipulation
+* Entries
 ** Clone
 #+BEGIN_SRC emacs-lisp
 ;; TODO: (ledna-clone (self)
@@ -233,7 +202,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
   (apply #'append markers))
 ;; (select (ids "test-pass-purchased-p") (tags "test_tag"))
 #+END_SRC
-* Scheduling
+** Scheduling
 #+BEGIN_SRC emacs-lisp
 ;; (set-keyword "SCHEDULED" (active-timestamp (get-nearest-date (cdr (read (get-property "SCHEDULE" (car (ids "test-event"))))))) (select (ids "test-event")))
 ;; (set-scheduled (get-nearest-date (cdr (read (get-property "SCHEDULE" (car (ids "test-event")))))) (select (ids "test-event")))
@@ -279,6 +248,38 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
          (analyzed-time (org-read-date-analyze str default-time decoded-time))
          (encoded-time (apply #'encode-time analyzed-time)))
     (format-time-string (org-time-stamp-format t t) encoded-time)))
+#+END_SRC
+* Defaults
+** Reports
+#+BEGIN_SRC emacs-lisp
+(defun ledna-price-counter (&optional target currency)
+  (when-let (price (get-property "PRICE"))
+    (inc-property "MONEY-SPENT" price (or currency "RUB") target)))
+
+(defun ledna-time-counter (&optional target)
+  (when-let (duration (get-property "DURATION"))
+    (inc-property "TIME-SPENT" duration "hours" target)
+    (inc-property "TIMES" 1 "times" target)))
+
+(defun ledna-advanced-schedule (&optional target)
+  (when-let (schedule-prop (get-property "SCHEDULE"))
+    (let* ((schedule (cadr (read schedule-prop)))
+           (next-time (get-nearest-date schedule)))
+      (set-scheduled next-time target)
+      (set-todo-state "TODO" target)
+      (org-entry-put nil "LAST_REPEAT" (format-time-string
+					      (org-time-stamp-format t t)
+					      (current-time))))))
+
+(defun ledna-money-time-report ()
+  (when (string= (get-todo-state) "DONE")
+    (ledna-time-counter)
+    (ledna-price-counter))
+  (ledna-advanced-schedule))
+
+(defun ledna-touch (&optional target)
+  (set-scheduled (active-timestamp "now") target)
+  (set-todo-state "TODO" target))
 #+END_SRC
 * Provide
 #+BEGIN_SRC emacs-lisp
