@@ -268,6 +268,10 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
          (encoded-time (apply #'encode-time analyzed-time)))
     (format-time-string (org-time-stamp-format t t) encoded-time)))
 #+END_SRC
+* Provide
+#+BEGIN_SRC emacs-lisp
+(provide 'ledna)
+#+END_SRC
 * COMMENT Local Variables
 # Local Variables:
 # firestarter: (org-babel-tangle)
