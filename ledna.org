@@ -27,8 +27,8 @@ See `org-edna-run' for CHANGE-PLIST explanation.
 This shouldn't be run from outside of `org-trigger-hook'."
   (let* ((pos (plist-get change-plist :position))
          (type (plist-get change-plist :type))
-         (from (substring-no-properties (plist-get change-plist :from)))
-         (to (substring-no-properties (plist-get change-plist :to)))
+         (from (substring-no-properties (or (plist-get change-plist :from) "")))
+         (to (substring-no-properties (or (plist-get change-plist :to) "")))
 
          (strict-trigger (format "%s->%s" from to))
          (from-trigger (format "%s->*" from))
@@ -52,8 +52,8 @@ See `org-edna-run' for CHANGE-PLIST explanation.
 This shouldn't be run from outside of `org-trigger-hook'."
   (let* ((pos (plist-get change-plist :position))
          (type (plist-get change-plist :type))
-         (from (substring-no-properties (plist-get change-plist :from)))
-         (to (substring-no-properties (plist-get change-plist :to)))
+         (from (substring-no-properties (or (plist-get change-plist :from) "")))
+         (to (substring-no-properties (or (plist-get change-plist :to) "")))
 
          (strict-blocker (format "#%s->%s" from to))
          (from-blocker (format "#%s->*" from))
@@ -62,12 +62,12 @@ This shouldn't be run from outside of `org-trigger-hook'."
 
     (ledna-run change-plist
       (if-let (form
-                 (or
-                  (org-entry-get (point) strict-blocker org-edna-use-inheritance)
-                  (org-entry-get (point) from-blocker   org-edna-use-inheritance)
-                  (org-entry-get (point) to-blocker     org-edna-use-inheritance)
-                  (org-entry-get (point) all-blocker    org-edna-use-inheritance)))
-        (not (setq org-block-entry-blocking (eval (read form))))
+               (or
+                (org-entry-get (point) strict-blocker org-edna-use-inheritance)
+                (org-entry-get (point) from-blocker   org-edna-use-inheritance)
+                (org-entry-get (point) to-blocker     org-edna-use-inheritance)
+                (org-entry-get (point) all-blocker    org-edna-use-inheritance)))
+          (not (setq org-block-entry-blocking (eval (read form))))
         t))))
 
 (defmacro ledna-run (change-plist &rest body)
@@ -151,20 +151,19 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
     (org-insert-heading-respect-content)
     (insert (cdr (assoc-string "ITEM" source-properties)))
-    (set-todo-state todo-state)
+
     (mapc #'(lambda (property)
               (let ((p (assoc-string property source-properties)))
                 (org-set-property
                  (car p) (cdr p)))) target-properties)
 
+    (set-todo-state todo-state)
+
     (when archive-source-p
       (mapc #'(lambda (marker)
                 (save-excursion
                   (org-goto-marker-or-bmk marker)
-                  (org-archive-subtree))) source))
-
-    ;; TODO: customize possibility
-    (ledna-advanced-schedule)))
+                  (org-archive-subtree))) source))))
 #+END_SRC
 ** Properties
 #+BEGIN_SRC emacs-lisp
