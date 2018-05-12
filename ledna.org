@@ -1,9 +1,94 @@
 #+CATEGORY: ledna
 #+PROPERTY: header-args:emacs-lisp :tangle ledna.el
 
+* Examples
+** TODO State Switchers
+:PROPERTIES:
+:*->DONE:  (message "Done!")
+:*->TODO:  (message "Todo again :(")
+:#*->CANCELLED: t ;; never allow switch state to CANCELLED
+:END:
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2018-05-13 Sun 00:45]
+- State "DONE"       from "TODO"       [2018-05-13 Sun 00:45]
+- State "DONE"       from "TODO"       [2018-05-13 Sun 00:47]
+- State "DONE"       from "TODO"       [2018-05-13 Sun 00:48]
+- State "DONE"       from "TODO"       [2018-05-13 Sun 00:48]
+:END:
+
 * Core
 ** Wrapper
 #+BEGIN_SRC emacs-lisp
+(defun ledna-trigger-function-emacs-lisp (change-plist)
+  "Trigger function work-horse.
+
+See `org-edna-run' for CHANGE-PLIST explanation.
+
+This shouldn't be run from outside of `org-trigger-hook'."
+  (let* ((pos (plist-get change-plist :position))
+         (type (plist-get change-plist :type))
+         (from (substring-no-properties (plist-get change-plist :from)))
+         (to (substring-no-properties (plist-get change-plist :to)))
+
+         (strict-trigger (format "%s->%s" from to))
+         (from-trigger (format "%s->*" from))
+         (to-trigger (format "*->%s" to))
+         (all-trigger "*"))
+
+    (ledna-run change-plist
+      (when-let (form
+                 (or
+                  (org-entry-get (point) strict-trigger org-edna-use-inheritance)
+                  (org-entry-get (point) from-trigger   org-edna-use-inheritance)
+                  (org-entry-get (point) to-trigger     org-edna-use-inheritance)
+                  (org-entry-get (point) all-trigger    org-edna-use-inheritance)))
+        (eval (read form))))))
+
+(defun ledna-blocker-function-emacs-lisp (change-plist)
+  "Trigger function work-horse.
+
+See `org-edna-run' for CHANGE-PLIST explanation.
+
+This shouldn't be run from outside of `org-trigger-hook'."
+  (let* ((pos (plist-get change-plist :position))
+         (type (plist-get change-plist :type))
+         (from (substring-no-properties (plist-get change-plist :from)))
+         (to (substring-no-properties (plist-get change-plist :to)))
+
+         (strict-blocker (format "#%s->%s" from to))
+         (from-blocker (format "#%s->*" from))
+         (to-blocker (format "#*->%s" to))
+         (all-blocker "#*"))
+
+    (ledna-run change-plist
+      (if-let (form
+                 (or
+                  (org-entry-get (point) strict-blocker org-edna-use-inheritance)
+                  (org-entry-get (point) from-blocker   org-edna-use-inheritance)
+                  (org-entry-get (point) to-blocker     org-edna-use-inheritance)
+                  (org-entry-get (point) all-blocker    org-edna-use-inheritance)))
+        (not (setq org-block-entry-blocking (eval (read form))))
+        t))))
+
+(defmacro ledna-run (change-plist &rest body)
+  "Run a TODO state change.
+
+The state information is held in CHANGE-PLIST.
+
+If the TODO state is changing from a TODO state to a DONE state, run BODY."
+  (declare (indent 1))
+  `(if (eq (plist-get ,change-plist :type) 'todo-state-change)
+       (condition-case-unless-debug err
+           ,@body
+         (error
+          (if (eq (car err) 'invalid-read-syntax)
+              (org-edna--print-syntax-error (cdr err))
+            (message "Edna Error at heading %s: %s" (org-get-heading t t t) (error-message-string err)))
+          (setq org-block-entry-blocking (org-get-heading))
+          ;; Block
+          nil))
+     t))
+
 (defun ledna-dsl-init (&optional dsl)
   (let ((dsl (or dsl 'ledna)))
     (defvar ledna-dsl dsl "Language that edna uses for triggers and blockers.")
@@ -32,28 +117,6 @@ ORIG-FUN is a trigger function called with ARGS."
 
 ORIG-FUN is a blocker function called with ARGS."
   (apply ledna-dsl-blocker-handler args))
-
-(defun ledna-trigger-function-emacs-lisp (change-plist)
-  "Trigger function work-horse.
-
-See `emacs-edna-run' for CHANGE-PLIST explanation.
-
-This shouldn't be run from outside of `org-trigger-hook'."
-  (org-edna-run change-plist
-             (-when-let* ((form (org-entry-get (point) "TRIGGER" org-edna-use-inheritance)))
-               (eval (read form)))))
-
-(defun ledna-blocker-function-emacs-lisp (change-plist)
-  "Trigger function work-horse.
-
-See `emacs-edna-run' for CHANGE-PLIST explanation.
-
-This shouldn't be run from outside of `org-trigger-hook'."
-  (org-edna-run change-plist
-             (if-let* ((form (org-entry-get pos "BLOCKER" org-edna-use-inheritance)))
-                 ;; Return nil if there is no blocking entry
-                 (not (setq org-block-entry-blocking (eval (read form))))
-               t)))
 #+END_SRC
 
 #+RESULTS:
@@ -68,7 +131,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
 #+END_SRC
-* Entries
+* Entries Manipulation
 ** Clone
 #+BEGIN_SRC emacs-lisp
 ;; TODO: (ledna-clone (self)
@@ -78,11 +141,12 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 ;; (and (ledna-clone) (ledna-insert (org-entry-create "English Hometask" :todo "TODO" :tags "Hometask")) :after (self))
 
 (defun ledna-clone (&rest args)
-  (let* ((source (or (plist-get args :source) (self)))
-         (todo-state (or (plist-get args :todo-state) "TODO"))
-         (target-properties (or (plist-get args :properties) ()))
-         (insert-after (or (plist-get args :insert-after) (self)))
-         (archive-source-p (or (plist-get args :archive) nil))
+  (let* ((source            (or (plist-get args :source)       (self)))
+         (todo-state        (or (plist-get args :todo-state)   "TODO"))
+         (target-properties (or (plist-get args :properties)   ()))
+         (insert-after      (or (plist-get args :insert-after) (self)))
+         (archive-source-p  (or (plist-get args :archive)      nil))
+
          (source-properties (org-entry-properties)))
 
     (org-insert-heading-respect-content)
