@@ -141,13 +141,18 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 ;; (and (ledna-clone) (ledna-insert (org-entry-create "English Hometask" :todo "TODO" :tags "Hometask")) :after (self))
 
 (defun ledna-clone (&rest args)
-  (let* ((source            (or (plist-get args :source)       (self)))
-         (todo-state        (or (plist-get args :todo-state)   "TODO"))
-         (target-properties (or (plist-get args :properties)   ()))
-         (insert-after      (or (plist-get args :insert-after) (self)))
-         (archive-source-p  (or (plist-get args :archive)      nil))
+  (let* ((source                (or (plist-get args :source)       (self)))
+         (todo-state            (or (plist-get args :todo-state)   "TODO"))
+         (target-properties     (or (plist-get args :properties)   ()))
+         ;; (insert-after          (or (plist-get args :insert-after) (self)))
+         (archive-source-p      (or (plist-get args :archive)      nil))
+         (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
 
          (source-properties (org-entry-properties)))
+
+    (when (or cleanup-properties-p archive-source-p)
+      (mapc #'(lambda (property)
+                (org-delete-property (car property))) source-properties))
 
     (org-insert-heading-respect-content)
     (insert (cdr (assoc-string "ITEM" source-properties)))
