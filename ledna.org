@@ -6,7 +6,7 @@
 SCHEDULED: <2018-05-13 Sun 13:00>
 :PROPERTIES:
 :EFFORT:   01:45
-:TODO->DONE: (consider-effort-as-clocktime) ;; task was not clocked-in because of TODO state, but it has been DONE. Considering effort as task clocktime.
+:TODO->DONE: (ledna/consider-effort-as-clocktime) ;; task was not clocked-in because of TODO state, but it has been DONE. Considering effort as task clocktime.
 :END:
 ** TODO State Switchers
 :PROPERTIES:
@@ -288,7 +288,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 ** Time
 *** Effort as clock time
 #+BEGIN_SRC emacs-lisp
-(defun consider-effort-as-clocktime ()
+(defun ledna/consider-effort-as-clocktime ()
   (save-excursion
     (save-restriction
       (org-clock-find-position org-clock-in-resume)
