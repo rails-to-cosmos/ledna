@@ -289,20 +289,25 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 *** Effort as clock time
 #+BEGIN_SRC emacs-lisp
 (defun ledna/consider-effort-as-clocktime ()
-  (save-excursion
-    (save-restriction
-      (org-clock-find-position org-clock-in-resume)
-      (insert-before-markers "\n")
-      (backward-char 1)
-      (org-indent-line)
-      (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
-        (beginning-of-line 1)
-        (indent-line-to (- (org-get-indentation) 2)))
-      (insert org-clock-string " ")
-      (org-insert-time-stamp (org-get-scheduled-time (org-entry-beginning-position)) 'with-hm 'inactive)
-      (insert "--")
-      (org-insert-time-stamp (seconds-to-time (+ (time-to-seconds (org-get-scheduled-time (org-entry-beginning-position)))
-                                                 (* (org-duration-to-minutes (get-property "EFFORT")) 60))) 'with-hm 'inactive))))
+  (if-let (entry-effort (get-property "EFFORT"))
+      (save-excursion
+        (save-restriction
+          (org-clock-find-position org-clock-in-resume)
+          (insert-before-markers "\n")
+          (backward-char 1)
+          (org-indent-line)
+          (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
+            (beginning-of-line 1)
+            (indent-line-to (- (org-get-indentation) 2)))
+          (insert org-clock-string " ")
+
+          (let ((scheduled-time (org-get-scheduled-time (org-entry-beginning-position))))
+            (org-insert-time-stamp scheduled-time 'with-hm 'inactive)
+            (insert "--")
+            (org-insert-time-stamp (seconds-to-time (+ (time-to-seconds scheduled-time)
+                                                       (* (org-duration-to-minutes entry-effort) 60)))
+                                   'with-hm 'inactive)
+            (org-clock-update-time-maybe))))))
 #+END_SRC
 *** Nearest scheduling
 #+BEGIN_SRC emacs-lisp
