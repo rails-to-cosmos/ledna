@@ -4,8 +4,10 @@
 * Examples
 ** TODO State Switchers
 :PROPERTIES:
-:*->DONE:  (message "Done!")
-:*->TODO:  (message "Todo again :(")
+:*:        (message "Todo state has been changed")
+:TODO->*:  (message "Todo state has been changed from TODO")
+:*->DONE:  (message "Todo state has been changed to DONE")
+:*->TODO:  (message "Todo state has been changed to TODO")
 :#*->CANCELLED: t ;; never allow switch state to CANCELLED
 :END:
 :LOGBOOK:
@@ -14,6 +16,7 @@
 - State "DONE"       from "TODO"       [2018-05-13 Sun 00:47]
 - State "DONE"       from "TODO"       [2018-05-13 Sun 00:48]
 - State "DONE"       from "TODO"       [2018-05-13 Sun 00:48]
+- State "DONE"       from "TODO"       [2018-05-13 Sun 13:54]
 :END:
 
 * Core
@@ -36,18 +39,14 @@ This shouldn't be run from outside of `org-trigger-hook'."
          (from (cond ((symbolp from*) (symbol-name from*))
                      ((stringp from*) (substring-no-properties from*))))
 
-         (strict-trigger (format "%s->%s" from to))
-         (from-trigger (format "%s->*" from))
-         (to-trigger (format "*->%s" to))
-         (all-trigger "*"))
+         (prop-templates
+          (list (format "%s->%s" from to)
+                (format "%s->*" from)
+                (format "*->%s" to)
+                "*" "*->*")))
 
     (ledna-run change-plist
-      (when-let ((forms (remove 'nil (list
-                                (org-entry-get pos strict-trigger org-edna-use-inheritance)
-                                (org-entry-get pos from-trigger   org-edna-use-inheritance)
-                                (org-entry-get pos to-trigger     org-edna-use-inheritance)
-                                (org-entry-get pos all-trigger    org-edna-use-inheritance)))))
-
+      (when-let ((forms (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) prop-templates))))
         (mapc #'(lambda (form) (eval (read form))) forms)))))
 
 (defun ledna-blocker-function-emacs-lisp (change-plist)
@@ -64,19 +63,19 @@ This shouldn't be run from outside of `org-trigger-hook'."
                    ((stringp to*) (substring-no-properties to*))))
          (from (cond ((symbolp from*) (symbol-name from*))
                      ((stringp from*) (substring-no-properties from*))))
-         (strict-blocker (format "#%s->%s" from to))
-         (from-blocker (format "#%s->*" from))
-         (to-blocker (format "#*->%s" to))
-         (all-blocker "#*"))
+
+         (prop-templates
+          (list (format "#%s->%s" from to)
+                (format "#%s->*" from)
+                (format "#*->%s" to)
+                "#*" "#*->*")))
 
     (ledna-run change-plist
-      (if-let ((forms (remove 'nil (list
-                                (org-entry-get pos strict-blocker org-edna-use-inheritance)
-                                (org-entry-get pos from-blocker   org-edna-use-inheritance)
-                                (org-entry-get pos to-blocker     org-edna-use-inheritance)
-                                (org-entry-get pos all-blocker    org-edna-use-inheritance)))))
-          (not (setq org-block-entry-blocking (every (mapcar #'(lambda (form) (eval (read form))) forms))))
+      (if-let ((forms (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) prop-templates))))
+          (not (setq org-block-entry-blocking (not (some 'null (mapcar #'(lambda (form) (eval (read form))) forms)))))
         t))))
+
+
 
 (defmacro ledna-run (change-plist &rest body)
   "Run a TODO state change.
