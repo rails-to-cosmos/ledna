@@ -76,7 +76,6 @@ This shouldn't be run from outside of `org-trigger-hook'."
         t))))
 
 
-
 (defmacro ledna-run (change-plist &rest body)
   "Run a TODO state change.
 
@@ -152,15 +151,15 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
          (archive-source-p      (or (plist-get args :archive)      nil))
          (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
 
-         (source-properties (org-entry-properties)))
+         (source-properties (org-entry-properties))
+         (source-tags (org-get-tags-string)))
 
     (when (or cleanup-properties-p archive-source-p)
       (mapc #'(lambda (property)
                 (org-delete-property (car property))) source-properties))
 
     (org-insert-heading-respect-content)
-    (insert (cdr (assoc-string "ITEM" source-properties)))
-
+    (insert (cdr (assoc-string "ITEM" source-properties)) " " source-tags)
     (mapc #'(lambda (property)
               (if-let (p (assoc-string property source-properties))
                   (set-property (car p) (cdr p))
@@ -174,6 +173,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                   (org-goto-marker-or-bmk marker)
                   (org-archive-subtree))) source))))
 #+END_SRC
+
+#+RESULTS:
+: ledna-clone
+
 ** Properties
 #+BEGIN_SRC emacs-lisp
 (defun set-property (property value &optional target)
