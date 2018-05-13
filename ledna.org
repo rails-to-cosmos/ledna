@@ -271,13 +271,55 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
    (lambda nil (point-marker))
    match-spec scope skip))
 #+END_SRC
-*** Select
+*** Select wrapper
 #+BEGIN_SRC emacs-lisp
 (defun select (&rest markers)
   (apply #'append markers))
 ;; (select (ids "test-pass-purchased-p") (tags "test_tag"))
+;; TODO (select :ids '(test-pass-purchased-p) :tags '(test_tag))
 #+END_SRC
 ** Scheduling
+*** Nearest scheduling
+#+BEGIN_SRC emacs-lisp
+(defun ledna-advanced-schedule (&optional target)
+  (when-let (schedule-prop (get-property "SCHEDULE"))
+    (let* ((schedule (cadr (read schedule-prop)))
+           (next-time (get-nearest-date schedule)))
+      (set-scheduled next-time target)
+      (set-todo-state "TODO" target)
+      (org-entry-put nil "LAST_REPEAT" (format-time-string
+					      (org-time-stamp-format t t)
+					      (current-time))))))
+
+(defun get-nearest-date (times)
+  (cl-flet* ((diff (time)
+                   (let* ((current-sec (time-to-seconds (org-current-time)))
+                          (target-sec (org-time-string-to-seconds (active-timestamp time)))
+                          (diff-sec (- target-sec current-sec)))
+                     (cond ((and (> diff-sec 0) (< diff-sec 604800)) diff-sec)
+                           ((< diff-sec 0) (+ diff-sec 604800))
+                           ((> diff-sec 604800) (- diff-sec 604800)))))
+             (comparator (a b) (< (diff a) (diff b))))
+    (let ((nearest-date (car (sort times #'comparator))))
+      nearest-date)))
+#+END_SRC
+*** Timestamps
+#+BEGIN_SRC emacs-lisp
+(defun active-timestamp (str)
+  (let* ((default-time (org-current-time))
+         (decoded-time (decode-time default-time nil))
+         (analyzed-time (org-read-date-analyze str default-time decoded-time))
+         (encoded-time (apply #'encode-time analyzed-time)))
+    (format-time-string (org-time-stamp-format t) encoded-time)))
+
+(defun inactive-timestamp (str)
+  (let* ((default-time (org-current-time))
+         (decoded-time (decode-time default-time nil))
+         (analyzed-time (org-read-date-analyze str default-time decoded-time))
+         (encoded-time (apply #'encode-time analyzed-time)))
+    (format-time-string (org-time-stamp-format t t) encoded-time)))
+#+END_SRC
+*** Setters/getters
 #+BEGIN_SRC emacs-lisp
 ;; (set-keyword "SCHEDULED" (active-timestamp (get-nearest-date (cdr (read (get-property "SCHEDULE" (car (ids "test-event"))))))) (select (ids "test-event")))
 ;; (set-scheduled (get-nearest-date (cdr (read (get-property "SCHEDULE" (car (ids "test-event")))))) (select (ids "test-event")))
@@ -297,63 +339,34 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              (org-add-planning-info 'scheduled ts)
                              ts))))
     (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
-
-(defun get-nearest-date (times)
-  (cl-flet* ((diff (time)
-                   (let* ((current-sec (time-to-seconds (org-current-time)))
-                          (target-sec (org-time-string-to-seconds (active-timestamp time)))
-                          (diff-sec (- target-sec current-sec)))
-                     (cond ((and (> diff-sec 0) (< diff-sec 604800)) diff-sec)
-                           ((< diff-sec 0) (+ diff-sec 604800))
-                           ((> diff-sec 604800) (- diff-sec 604800)))))
-             (comparator (a b) (< (diff a) (diff b))))
-    (let ((nearest-date (car (sort times #'comparator))))
-      nearest-date)))
-
-(defun active-timestamp (str)
-  (let* ((default-time (org-current-time))
-         (decoded-time (decode-time default-time nil))
-         (analyzed-time (org-read-date-analyze str default-time decoded-time))
-         (encoded-time (apply #'encode-time analyzed-time)))
-    (format-time-string (org-time-stamp-format t) encoded-time)))
-
-(defun inactive-timestamp (str)
-  (let* ((default-time (org-current-time))
-         (decoded-time (decode-time default-time nil))
-         (analyzed-time (org-read-date-analyze str default-time decoded-time))
-         (encoded-time (apply #'encode-time analyzed-time)))
-    (format-time-string (org-time-stamp-format t t) encoded-time)))
 #+END_SRC
 * Defaults
-** Reports
+** Counters
 #+BEGIN_SRC emacs-lisp
 (defmacro ledna-counter (countable counter &optional target unit)
-  `(when-let (inc (get-property ,countable ,target))
+  `(when-let (inc (cond ((stringp ,countable) (get-property ,countable ,target))
+                        ((numberp ,countable) ,countable)))
      (inc-property ,counter inc ,unit ,target)))
 
 (defun ledna-price-counter (&optional target unit)
-  (ledna-counter "PRICE" "MONEY-SPENT" target unit))
+  (ledna-counter "PRICE" "Money" target unit))
 
 (defun ledna-time-counter (&optional target)
-  (ledna-counter "DURATION" "TIME-SPENT" target "hours"))
+  (ledna-counter "DURATION" "Time" target "hours"))
 
-(defun ledna-advanced-schedule (&optional target)
-  (when-let (schedule-prop (get-property "SCHEDULE"))
-    (let* ((schedule (cadr (read schedule-prop)))
-           (next-time (get-nearest-date schedule)))
-      (set-scheduled next-time target)
-      (set-todo-state "TODO" target)
-      (org-entry-put nil "LAST_REPEAT" (format-time-string
-					      (org-time-stamp-format t t)
-					      (current-time))))))
-
-(defun ledna-money-time-report (&optional target)
-  (ledna-time-counter target)
-  (ledna-price-counter target))
-
+(defun ledna-times-counter (&optional target)
+  (ledna-counter 1 "Times" target "times"))
+#+END_SRC
+** Reports
+#+BEGIN_SRC emacs-lisp
 (defun ledna-touch (&optional target)
   (set-scheduled (active-timestamp "now") target)
   (set-todo-state "TODO" target))
+
+(defun ledna-money-time-report (&optional target)
+  (ledna-time-counter target)
+  (ledna-price-counter target)
+  (ledna-times-counter target))
 #+END_SRC
 * Provide
 #+BEGIN_SRC emacs-lisp
