@@ -2,6 +2,12 @@
 #+PROPERTY: header-args:emacs-lisp :tangle ledna.el
 
 * Examples
+** TODO Effort logging (goto-char org-clock-marker)
+SCHEDULED: <2018-05-13 Sun 13:00>
+:PROPERTIES:
+:EFFORT:   01:45
+:TODO->DONE: (consider-effort-as-clocktime) ;; task was not clocked-in because of TODO state, but it has been DONE. Considering effort as task clocktime.
+:END:
 ** TODO State Switchers
 :PROPERTIES:
 :*:        (message "Todo state has been changed")
@@ -137,17 +143,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 * Entries Manipulation
 ** Clone
 #+BEGIN_SRC emacs-lisp
-;; TODO: (ledna-clone (self)
-;;        :state "TODO"
-;;        :properties '(SCHEDULE TRIGGER)
-;;        :insert-after (self))
-;; (and (ledna-clone) (ledna-insert (org-entry-create "English Hometask" :todo "TODO" :tags "Hometask")) :after (self))
-
 (defun ledna-clone (&rest args)
   (let* ((source                (or (plist-get args :source)       (self)))
          (todo-state            (or (plist-get args :todo-state)   "TODO"))
-         (target-properties     (or (plist-get args :properties)   ()))
-         ;; (insert-after          (or (plist-get args :insert-after) (self)))
+         (target-properties     (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
          (archive-source-p      (or (plist-get args :archive)      nil))
          (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
 
@@ -160,10 +159,15 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
     (org-insert-heading-respect-content)
     (insert (cdr (assoc-string "ITEM" source-properties)) " " source-tags)
+
+    ;; Copy properties
     (mapc #'(lambda (property)
               (if-let (p (assoc-string property source-properties))
-                  (set-property (car p) (cdr p))
-                (error (format "Property %s was not found in the source heading." property)))) target-properties)
+                  (condition-case nil
+                      (set-property (car p) (cdr p))
+                    (error nil))
+                (error (format "Property %s was not found in the source heading." property))))
+          target-properties)
 
     (set-todo-state todo-state)
 
@@ -171,7 +175,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
       (mapc #'(lambda (marker)
                 (save-excursion
                   (org-goto-marker-or-bmk marker)
-                  (org-archive-subtree))) source))))
+                  (org-archive-subtree)))
+            source))))
 #+END_SRC
 
 #+RESULTS:
@@ -230,7 +235,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 #+BEGIN_SRC emacs-lisp
 (defun self ()
   (save-excursion
-    (goto-char (org-entry-beginning-position))
+    (org-back-to-heading)
     (list (point-marker))))
 #+END_SRC
 *** Ids
@@ -246,6 +251,8 @@ Note that in the edna syntax, the IDs don't need to be quoted."
   (mapcar (lambda (id) (org-id-find id 'marker)) ids))
 #+END_SRC
 *** Tags
+:PROPERTIES:
+:END:
 #+BEGIN_SRC emacs-lisp
 (defun tags (match-spec &optional scope skip)
   "Find entries using Org matching.
@@ -278,7 +285,25 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 ;; (select (ids "test-pass-purchased-p") (tags "test_tag"))
 ;; TODO (select :ids '(test-pass-purchased-p) :tags '(test_tag))
 #+END_SRC
-** Scheduling
+** Time
+*** Effort as clock time
+#+BEGIN_SRC emacs-lisp
+(defun consider-effort-as-clocktime ()
+  (save-excursion
+    (save-restriction
+      (org-clock-find-position org-clock-in-resume)
+      (insert-before-markers "\n")
+      (backward-char 1)
+      (org-indent-line)
+      (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
+        (beginning-of-line 1)
+        (indent-line-to (- (org-get-indentation) 2)))
+      (insert org-clock-string " ")
+      (org-insert-time-stamp (org-get-scheduled-time (org-entry-beginning-position)) 'with-hm 'inactive)
+      (insert "--")
+      (org-insert-time-stamp (seconds-to-time (+ (time-to-seconds (org-get-scheduled-time (org-entry-beginning-position)))
+                                                 (* (org-duration-to-minutes (get-property "EFFORT")) 60))) 'with-hm 'inactive))))
+#+END_SRC
 *** Nearest scheduling
 #+BEGIN_SRC emacs-lisp
 (defun ledna-advanced-schedule (&optional target)
