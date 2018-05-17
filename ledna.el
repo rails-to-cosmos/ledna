@@ -307,6 +307,25 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
     (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
+(defun set-deadline (timestamp &optional marker)
+  (let ((mark (or marker (self))))
+    (save-mark-and-excursion
+     (cl-labels
+      ((set-scheduled-on (mts)
+                         (let ((pom (car mts)) (ts (cdr mts)))
+                           (with-current-buffer
+                               (marker-buffer pom)
+                             (goto-char pom)
+                             (org-add-planning-info 'deadline ts)
+                             ts))))
+      (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
+
+(defun set-hometask-deadline (marker)
+  (when-let (schedule-prop (get-property "SCHEDULE"))
+    (let* ((schedule (cadr (read schedule-prop)))
+           (next-time (get-nearest-date schedule)))
+      (set-deadline next-time marker))))
+
 (defmacro ledna-counter (countable counter &optional target unit)
   `(when-let (inc (cond ((stringp ,countable) (get-property ,countable ,target))
                         ((numberp ,countable) ,countable)))
