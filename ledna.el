@@ -124,6 +124,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
     (org-insert-heading-respect-content)
     (insert (cdr (assoc-string "ITEM" source-properties)) " " source-tags)
+    (set-todo-state todo-state)
 
     ;; Copy properties
     (mapc #'(lambda (property)
@@ -133,8 +134,6 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                     (error nil))
                 (error (format "Property %s was not found in the source heading." property))))
           target-properties)
-
-    (set-todo-state todo-state)
 
     (when archive-source-p
       (mapc #'(lambda (marker)
