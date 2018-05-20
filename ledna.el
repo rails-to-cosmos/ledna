@@ -109,38 +109,45 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (numberp (car (read-from-string string))))
 
 (defun ledna-clone (&rest args)
-  (let* ((source                (or (plist-get args :source)       (self)))
-         (todo-state            (or (plist-get args :todo-state)   "TODO"))
-         (target-properties     (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
-         (archive-source-p      (or (plist-get args :archive)      nil))
-         (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
+  (save-excursion
+    (org-back-to-heading)
 
-         (source-properties (org-entry-properties))
-         (source-tags (org-get-tags-string)))
+    (let* ((source                (or (plist-get args :source)       (self)))
+           (todo-state            (or (plist-get args :todo-state)   "TODO"))
+           (target-properties     (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
+           (archive-source-p      (or (plist-get args :archive)      nil))
+           (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
+           (target-name-fmt       (or (plist-get args :format)       (cdr (assoc-string "ITEM" source-properties))))
+           (target-name-fmt-args  (or (plist-get args :args)         nil))
 
-    (when (or cleanup-properties-p archive-source-p)
+           (source-properties (org-entry-properties))
+           (source-tags (org-get-tags-string)))
+
+      (when (or cleanup-properties-p archive-source-p)
+        (mapc #'(lambda (property)
+                  (org-delete-property (car property))) source-properties))
+
+      (org-insert-heading-respect-content)
+      (insert (apply #'format (append (list target-name-fmt) target-name-fmt-args))
+              " " source-tags)
+      (set-todo-state todo-state)
+
+      ;; Copy properties
       (mapc #'(lambda (property)
-                (org-delete-property (car property))) source-properties))
+                (if-let (p (assoc-string property source-properties))
+                    (condition-case nil
+                        (set-property (car p) (cdr p))
+                      (error nil))
+                  (error (format "Property %s was not found in the source heading." property))))
+            target-properties)
 
-    (org-insert-heading-respect-content)
-    (insert (cdr (assoc-string "ITEM" source-properties)) " " source-tags)
-    (set-todo-state todo-state)
-
-    ;; Copy properties
-    (mapc #'(lambda (property)
-              (if-let (p (assoc-string property source-properties))
-                  (condition-case nil
-                      (set-property (car p) (cdr p))
-                    (error nil))
-                (error (format "Property %s was not found in the source heading." property))))
-          target-properties)
-
-    (when archive-source-p
-      (mapc #'(lambda (marker)
-                (save-excursion
-                  (org-goto-marker-or-bmk marker)
-                  (org-archive-subtree)))
-            source))))
+      ;; Archive source
+      (when archive-source-p
+        (mapc #'(lambda (marker)
+                  (save-excursion
+                    (org-goto-marker-or-bmk marker)
+                    (org-archive-subtree)))
+              source)))))
 
 (defun set-property (property value &optional target)
   (dolist (mark (or target (self)))
@@ -171,6 +178,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
            (result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label))))
       (set-property property result-value (list mark))
       result-value)))
+
+(defun inc-property-get (property &rest args)
+  (apply #'inc-property (append (list property) args))
+  (get-property property))
 
 (defun get-todo-state (&optional marker)
   (let ((mark (car (or marker (self)))))
