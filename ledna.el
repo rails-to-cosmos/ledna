@@ -1,3 +1,9 @@
+(setq ledna/magic-tags
+      '((Class . ((TODO->DONE . (ledna/consider-effort-as-clocktime))
+                  (->TODO . (ledna-advanced-schedule))
+                  (*->DONE . (ledna-clone :cleanup t :format "%s gym class" :args (list (num-with-ordinal-indicator (string-to-number (inc-property-get "COUNT"))))))))
+        (Hello . '())))
+
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
 
@@ -6,6 +12,8 @@ See `org-edna-run' for CHANGE-PLIST explanation.
 This shouldn't be run from outside of `org-trigger-hook'."
   (let* ((pos (plist-get change-plist :position))
          (type (plist-get change-plist :type))
+
+         (source-tags (org-get-tags))
 
          (to* (or (plist-get change-plist :to) ""))
          (from* (or (plist-get change-plist :from) ""))
@@ -20,6 +28,13 @@ This shouldn't be run from outside of `org-trigger-hook'."
                 (format "%s->*" from)
                 (format "*->%s" to)
                 "*" "*->*")))
+
+    ;; Support magic tags
+    (when-let (tags (intersection (mapcar #'intern source-tags)
+                                  (mapcar #'car ledna/magic-tags)))
+      (dolist (tag tags nil)
+        (let ((prop-alist (alist-get 'Class ledna/magic-tags)))
+          (mapc #'(lambda (kv) (set-property (symbol-name (car kv)) (prin1-to-string (cdr kv)))) prop-alist))))
 
     (ledna-run change-plist
       (when-let ((forms (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) prop-templates))))
