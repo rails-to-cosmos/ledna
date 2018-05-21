@@ -7,8 +7,7 @@
 (setq ledna/magic-tags
       '((Class . ((TODO->DONE . (ledna/consider-effort-as-clocktime))
                   (->TODO . (ledna-advanced-schedule))
-                  (*->DONE . (ledna-clone :cleanup t :format "%s gym class" :args (list (num-with-ordinal-indicator (string-to-number (inc-property-get "COUNT"))))))))
-        (Hello . '())))
+                  (*->DONE . (ledna-clone :cleanup t :format "%s gym class" :args (list (num-with-ordinal-indicator (string-to-number (inc-property-get "COUNT"))))))))))
 #+END_SRC
 ** TODO Effort logging (goto-char org-clock-marker)
 SCHEDULED: <2018-05-13 Sun 13:00>
@@ -42,35 +41,57 @@ SCHEDULED: <2018-05-13 Sun 13:00>
 See `org-edna-run' for CHANGE-PLIST explanation.
 
 This shouldn't be run from outside of `org-trigger-hook'."
-  (let* ((pos (plist-get change-plist :position))
-         (type (plist-get change-plist :type))
+  (cl-flet* ((set-prop-kv (kv)
+                          (set-property
+                           (symbol-name (car kv))
+                           (prin1-to-string (cdr kv))))
 
-         (source-tags (org-get-tags))
+             (set-prop-alist (alist)
+                             (mapc #'set-prop-kv alist))
 
-         (to* (or (plist-get change-plist :to) ""))
-         (from* (or (plist-get change-plist :from) ""))
+             (cons-prop (prop)
+                        (let ((sprop (symbol-name prop)))
+                          (cons sprop (get-property sprop)))))
 
-         (to (cond ((symbolp to*) (symbol-name to*))
-                   ((stringp to*) (substring-no-properties to*))))
-         (from (cond ((symbolp from*) (symbol-name from*))
-                     ((stringp from*) (substring-no-properties from*))))
+    (let* ((pos (plist-get change-plist :position))
+           (type (plist-get change-plist :type))
 
-         (prop-templates
-          (list (format "%s->%s" from to)
-                (format "%s->*" from)
-                (format "*->%s" to)
-                "*" "*->*")))
+           (src-org-tags (org-get-tags))
+           (src-org-plist '())
 
-    ;; Support magic tags
-    (when-let (tags (intersection (mapcar #'intern source-tags)
-                                  (mapcar #'car ledna/magic-tags)))
-      (dolist (tag tags nil)
-        (let ((prop-alist (alist-get 'Class ledna/magic-tags)))
-          (mapc #'(lambda (kv) (set-property (symbol-name (car kv)) (prin1-to-string (cdr kv)))) prop-alist))))
+           (to* (or (plist-get change-plist :to) ""))
+           (from* (or (plist-get change-plist :from) ""))
 
-    (ledna-run change-plist
-      (when-let ((forms (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) prop-templates))))
-        (mapc #'(lambda (form) (eval (read form))) forms)))))
+           (to (cond ((symbolp to*) (symbol-name to*))
+                     ((stringp to*) (substring-no-properties to*))))
+           (from (cond ((symbolp from*) (symbol-name from*))
+                       ((stringp from*) (substring-no-properties from*))))
+
+           (prop-templates
+            (list (format "%s->%s" from to)
+                  (format "%s->*" from)
+                  (format "*->%s" to)
+                  "*" "*->*")))
+
+      ;; Support magic tags
+      (when-let (tags (intersection (mapcar #'intern src-org-tags)
+                                    (mapcar #'car ledna/magic-tags)))
+        (dolist (tag tags)
+          (let ((prop-alist (alist-get tag ledna/magic-tags)))
+            (dolist (prop (mapcar #'cons-prop (mapcar #'car prop-alist)) src-org-plist)
+              (setq src-org-plist
+                    (let ((pk (intern (car prop)))
+                          (val (cdr prop)))
+                      (plist-put src-org-plist pk val))))
+            (set-prop-alist prop-alist))))
+
+      (ledna-run change-plist
+        (when-let ((forms (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) prop-templates))))
+          (mapc #'(lambda (form) (eval (read form))) forms)))
+
+      (loop for (k v) on src-org-plist by (function cddr)
+            do (cond ((null v) (org-delete-property (symbol-name k)))
+                     (t (set-property (symbol-name k) v)))))))
 
 (defun ledna-blocker-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -147,6 +168,10 @@ ORIG-FUN is a trigger function called with ARGS."
 ORIG-FUN is a blocker function called with ARGS."
   (apply ledna-dsl-blocker-handler args))
 #+END_SRC
+
+#+RESULTS:
+: ledna-dsl-specifier-blocker
+
 ** Utils
 #+BEGIN_SRC emacs-lisp
 (defun string-is-numeric-p (string)
