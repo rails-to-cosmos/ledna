@@ -1,7 +1,7 @@
 (setq ledna/magic-tags
       '((Class . ((TODO->DONE . (ledna/consider-effort-as-clocktime))
                   (->TODO . (ledna-advanced-schedule))
-                  (*->DONE . (ledna-clone :cleanup t :properties '("COUNT" "TEMPLATE")))))))
+                  (*->DONE . (ledna-clone :cleanup t :properties '("COUNT" "TEMPLATE" "EFFORT" "SCHEDULE")))))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
