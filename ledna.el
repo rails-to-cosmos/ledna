@@ -151,7 +151,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (save-excursion
     (org-back-to-heading)
 
-    (let* ((source                (or (plist-get args :source)       (self)))
+    (let* ((src-entry             (or (plist-get args :source)       (self)))
 
            (target-name-fmt-args  (or (plist-get args :args)
                                       (list
@@ -164,7 +164,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
            (src-tag-str           (org-get-tags-string))
 
            (todo-state            (or (plist-get args :todo-state)   "TODO"))
-           (target-properties     (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
+           (tgt-props             (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
            (archive-source-p      (or (plist-get args :archive)      nil))
            (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
            (target-name-fmt       (or (plist-get args :format)       (or (get-property "TEMPLATE") (cdr (assoc-string "ITEM" src-prop))))))
@@ -178,12 +178,11 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
       ;; Copy properties
       (mapc #'(lambda (property)
-                (if-let (p (assoc-string property src-prop))
+                (when-let (p (assoc-string property src-prop))
                     (condition-case nil
                         (set-property (car p) (cdr p))
-                      (error nil))
-                  (error (format "Property %s was not found in the source heading." property))))
-            target-properties)
+                      (error nil))))
+            tgt-props)
 
       (set-todo-state todo-state)
 
@@ -193,7 +192,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                   (save-excursion
                     (org-goto-marker-or-bmk marker)
                     (org-archive-subtree)))
-              source)))))
+              src-entry)))))
 
 (defun set-property (property value &optional target)
   (dolist (mark (or target (self)))
