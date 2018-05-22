@@ -155,7 +155,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
            (target-name-fmt-args  (or (plist-get args :args)
                                       (list
-                                       (cons "ledna_times"
+                                       (cons "ledna-times"
                                              (num-with-ordinal-indicator
                                               (string-to-number
                                                (inc-property-get "COUNT")))))))
@@ -175,9 +175,6 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
       (org-insert-heading-respect-content)
       (insert (s-format target-name-fmt 'aget target-name-fmt-args) " " src-tag-str)
-      ;; (insert (apply #'format (append (list target-name-fmt) target-name-fmt-args))
-      ;;         " " src-tag-str)
-      (set-todo-state todo-state)
 
       ;; Copy properties
       (mapc #'(lambda (property)
@@ -187,6 +184,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                       (error nil))
                   (error (format "Property %s was not found in the source heading." property))))
             target-properties)
+
+      (set-todo-state todo-state)
 
       ;; Archive source
       (when archive-source-p
