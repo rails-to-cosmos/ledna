@@ -1,7 +1,7 @@
 (setq ledna/magic-tags
       '((Class . ((TODO->DONE . (ledna/consider-effort-as-clocktime))
                   (->TODO . (ledna-advanced-schedule))
-                  (*->DONE . (ledna-clone :cleanup t :format "%s gym class" :args (list (num-with-ordinal-indicator (string-to-number (inc-property-get "COUNT"))))))))))
+                  (*->DONE . (ledna-clone :cleanup t :properties '("COUNT" "TEMPLATE")))))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -47,10 +47,11 @@ This shouldn't be run from outside of `org-trigger-hook'."
         (dolist (tag tags)
           (let ((prop-alist (alist-get tag ledna/magic-tags)))
             (dolist (prop (mapcar #'cons-prop (mapcar #'car prop-alist)) src-org-plist)
-              (setq src-org-plist
+              (when (or (s-contains-p "->" (car prop)) (s-contains-p "<-" (car prop)))
+                (setq src-org-plist
                     (let ((pk (intern (car prop)))
                           (val (cdr prop)))
-                      (plist-put src-org-plist pk val))))
+                      (plist-put src-org-plist pk val)))))
             (set-prop-alist prop-alist))))
 
       (ledna-run change-plist
@@ -144,33 +145,43 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
 
+(require 's)
+
 (defun ledna-clone (&rest args)
   (save-excursion
     (org-back-to-heading)
 
     (let* ((source                (or (plist-get args :source)       (self)))
-           (source-properties     (org-entry-properties))
-           (source-tags           (org-get-tags-string))
+
+           (target-name-fmt-args  (or (plist-get args :args)
+                                      (list
+                                       (cons "ledna_times"
+                                             (num-with-ordinal-indicator
+                                              (string-to-number
+                                               (inc-property-get "COUNT")))))))
+
+           (src-prop              (org-entry-properties))
+           (src-tag-str           (org-get-tags-string))
 
            (todo-state            (or (plist-get args :todo-state)   "TODO"))
            (target-properties     (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
            (archive-source-p      (or (plist-get args :archive)      nil))
            (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
-           (target-name-fmt       (or (plist-get args :format)       (cdr (assoc-string "ITEM" source-properties))))
-           (target-name-fmt-args  (or (plist-get args :args)         nil)))
+           (target-name-fmt       (or (plist-get args :format)       (or (get-property "TEMPLATE") (cdr (assoc-string "ITEM" src-prop))))))
 
       (when (or cleanup-properties-p archive-source-p)
         (mapc #'(lambda (property)
-                  (org-delete-property (car property))) source-properties))
+                  (org-delete-property (car property))) src-prop))
 
       (org-insert-heading-respect-content)
-      (insert (apply #'format (append (list target-name-fmt) target-name-fmt-args))
-              " " source-tags)
+      (insert (s-format target-name-fmt 'aget target-name-fmt-args) " " src-tag-str)
+      ;; (insert (apply #'format (append (list target-name-fmt) target-name-fmt-args))
+      ;;         " " src-tag-str)
       (set-todo-state todo-state)
 
       ;; Copy properties
       (mapc #'(lambda (property)
-                (if-let (p (assoc-string property source-properties))
+                (if-let (p (assoc-string property src-prop))
                     (condition-case nil
                         (set-property (car p) (cdr p))
                       (error nil))
