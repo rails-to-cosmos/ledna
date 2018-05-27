@@ -1,8 +1,8 @@
 (setq ledna/magic-tags
       '((Class . ((TODO->DONE . (ledna/consider-effort-as-clocktime))
                   (->TODO . (ledna-advanced-schedule))
-                  (*->DONE . (progn (ledna-clone :cleanup t :properties '("COUNT" "TEMPLATE" "EFFORT" "SCHEDULE" "$HOMETASK"))
-                                   (set-hometask-deadline (select (tags (get-property "$HOMETASK"))))))))))
+                  (*->DONE . (progn (set-hometask-deadline (select (tags (get-property "$HOMETASK"))))
+                                    (ledna-clone :cleanup t :properties '("COUNT" "TEMPLATE" "EFFORT" "SCHEDULE" "$HOMETASK"))))))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
