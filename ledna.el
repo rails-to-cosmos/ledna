@@ -2,16 +2,21 @@
 ;; greater priorities mean latter execution
 (setq ledna/magic-tags
       '(;; Tag                Status       Handler                               Priority
-        (  Classwork         ((*->DONE    (set-hometask-deadline)))              1)
 
+        ;; Constructors
         (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
 
+        ;; Destructors
+        (  Classwork         ((*->DONE    (set-hometask-deadline)))              1)
         (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
         (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
+
         (  Clone             ((*->DONE    (ledna-clone)))                        10)
 
-        (  Cleanup           ((*->DONE    (delete-entry-properties)))            100)))
+        ;; User-defined properties are executed with priority = 100
+
+        (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
@@ -21,16 +26,31 @@
 
 (defun apply-ledna-forms (org-props-keys pom)
   (ledna-run change-plist
-    (when-let ((org-props-vals (mapcar #'(lambda (f) (org-entry-get pom f org-edna-use-inheritance)) org-props-keys)))
-      ;; Magic tags support
-      (let* ((src-org-tags (mapcar #'intern (org-get-tags))))
-        (dolist (tag (ledna/magic-tags-list))
-          (when (member tag src-org-tags)
-            (let ((tag-magic-props (car (alist-get tag ledna/magic-tags))))
-              (loop for key in org-props-keys
-                    do (when-let (magic-form (car (alist-get (intern key) tag-magic-props)))
-                         (eval magic-form)))))))
-      (mapc #'(lambda (form) (when form (eval (read form)))) org-props-vals))))
+    (let (main-block-evaled-p)
+      (cl-flet ((eval-main-block (forms)
+                 (when (not main-block-evaled-p)
+                   (unwind-protect
+                       (mapc #'(lambda (form) (when form (eval (read form)))) forms)
+                     (setq main-block-evaled-p t)))))
+
+        (when-let ((org-props-vals (mapcar #'(lambda (f) (org-entry-get pom f org-edna-use-inheritance)) org-props-keys)))
+
+          ;; Magic tags support
+          (let* ((src-org-tags (mapcar #'intern (org-get-tags))))
+            (dolist (tag (ledna/magic-tags-list))
+              (when (member tag src-org-tags)
+                (let* ((mt-params (alist-get tag ledna/magic-tags))
+                       (mt-priority (cadr mt-params))
+                       (mt-props (car mt-params)))
+
+                  (when (>= mt-priority 100)
+                    (eval-main-block org-props-vals))
+
+                  (loop for key in org-props-keys
+                        do (when-let (magic-form (car (alist-get (intern key) mt-props)))
+                             (eval magic-form)))))))
+
+          (eval-main-block org-props-vals))))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
