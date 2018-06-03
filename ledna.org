@@ -4,12 +4,25 @@
 * Examples
 ** TODO Magic tags
 #+BEGIN_SRC emacs-lisp
+;; priority list of magic tags
+;; greater priorities mean latter execution
 (setq ledna/magic-tags
-      '((Class . ((TODO->DONE . (ledna/consider-effort-as-clocktime))
-                  (->TODO . (ledna-advanced-schedule))
-                  (*->DONE . (progn (set-hometask-deadline (select (tags (get-property "$HOMETASK"))))
-                                    (ledna-clone :cleanup t
-                                                 :properties '("COUNT" "TEMPLATE" "EFFORT" "SCHEDULE" "$HOMETASK"))))))))
+      '(;; Tag                Status       Handler                               Priority
+        (  Classwork         ((*->DONE    (set-hometask-deadline)))              1)
+
+        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
+        (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
+
+        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
+        (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
+        (  Clone             ((*->DONE    (ledna-clone)))                        10)
+        (  Cleanup           ((*->DONE    (message "Cleanup properties!")))      100)))
+
+(defun ledna/magic-tags-sorted ()
+  (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
+
+(defun ledna/magic-tags-list ()
+  (mapcar #'car ledna/magic-tags))
 #+END_SRC
 ** TODO Effort logging (goto-char org-clock-marker)
 SCHEDULED: <2018-05-13 Sun 13:00>
@@ -43,23 +56,35 @@ SCHEDULED: <2018-05-13 Sun 13:00>
 See `org-edna-run' for CHANGE-PLIST explanation.
 
 This shouldn't be run from outside of `org-trigger-hook'."
-  (cl-flet* ((set-prop-kv (kv)
-                          (set-property
-                           (symbol-name (car kv))
-                           (prin1-to-string (cdr kv))))
+  (cl-flet* ((set-magic-props (pl)
+                 (loop for (k v) in pl do
+                       (set-property (symbol-name k) (prin1-to-string v))))
 
-             (set-prop-alist (alist)
-                             (mapc #'set-prop-kv alist))
+             (del-magic-props (pl)
+                 (loop for (k v) in pl do
+                       (org-delete-property (symbol-name k))))
 
-             (cons-prop (prop)
-                        (let ((sprop (symbol-name prop)))
-                          (cons sprop (get-property sprop)))))
+             (apply-ledna-forms (tpl pos)
+                 (ledna-run change-plist
+                     (when-let ((forms
+                         (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) tpl))))
+                       (mapc #'(lambda (form) (eval (read form))) forms))))
+
+             (set-org-props (pl)
+                 (loop for (k v) in pl
+                       do (cond
+                           ((or (null v)
+                                (and (string= "CATEGORY" k) (string= "???" v)))
+                            (org-delete-property k))
+                           (t (set-property k v))))))
 
     (let* ((pos (plist-get change-plist :position))
            (type (plist-get change-plist :type))
 
-           (src-org-tags (org-get-tags))
-           (src-org-plist '())
+           (src-org-tags (mapcar #'intern (org-get-tags)))
+           (src-org-prop-keys (mapcar #'car (org-entry-properties nil 'standard)))
+           (src-org-prop-vals (mapcar #'get-property src-org-prop-keys))
+           (src-org-prop-alist (mapcar* #'list src-org-prop-keys src-org-prop-vals))
 
            (to* (or (plist-get change-plist :to) ""))
            (from* (or (plist-get change-plist :from) ""))
@@ -70,31 +95,21 @@ This shouldn't be run from outside of `org-trigger-hook'."
                        ((stringp from*) (substring-no-properties from*))))
 
            (prop-templates
-            (list (format "%s->%s" from to)
-                  (format "%s->*" from)
-                  (format "*->%s" to)
-                  "*" "*->*")))
+            (list (format "%s->%s" from to) (format "%s->*" from)
+                  (format "*->%s" to) "*" "*->*")))
 
       ;; Support magic tags
-      (when-let (tags (intersection (mapcar #'intern src-org-tags)
-                                    (mapcar #'car ledna/magic-tags)))
-        (dolist (tag tags)
-          (let ((prop-alist (alist-get tag ledna/magic-tags)))
-            (dolist (prop (mapcar #'cons-prop (mapcar #'car prop-alist)) src-org-plist)
-              (when (or (s-contains-p "->" (car prop)) (s-contains-p "<-" (car prop)))
-                (setq src-org-plist
-                    (let ((pk (intern (car prop)))
-                          (val (cdr prop)))
-                      (plist-put src-org-plist pk val)))))
-            (set-prop-alist prop-alist))))
+      (let ((magic-tags (ledna/magic-tags-sorted)))
+        (dolist (tag src-org-tags)
+          (when-let (tag-params (alist-get tag magic-tags))
+            (let ((tag-magic-props (car tag-params)))
+              (set-magic-props tag-magic-props)
+              (unwind-protect
+                  (apply-ledna-forms prop-templates pos)
+                (del-magic-props tag-magic-props)
+                (set-org-props src-org-prop-alist))))))
 
-      (ledna-run change-plist
-        (when-let ((forms (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) prop-templates))))
-          (mapc #'(lambda (form) (eval (read form))) forms)))
-
-      (loop for (k v) on src-org-plist by (function cddr)
-            do (cond ((null v) (org-delete-property (symbol-name k)))
-                     (t (set-property (symbol-name k) v)))))))
+      (apply-ledna-forms prop-templates pos))))
 
 (defun ledna-blocker-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -186,6 +201,21 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (numberp (car (read-from-string string))))
 #+END_SRC
 * Entries Manipulation
+** Rename
+#+BEGIN_SRC emacs-lisp
+(defun ledna-entry-name-from-template ()
+  (org-back-to-heading)
+  (org-beginning-of-line)
+  (org-kill-line)
+
+  (let ((entry-name-format (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties)))))
+        (entry-name-fmt-args  (list
+                               (cons "ledna-times"
+                                     (num-with-ordinal-indicator
+                                      (string-to-number
+                                       (or (get-property "$COUNT") "1")))))))
+    (insert (s-format entry-name-format 'aget entry-name-fmt-args))))
+#+END_SRC
 ** Clone
 #+BEGIN_SRC emacs-lisp
 (require 's)
@@ -201,7 +231,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                                        (cons "ledna-times"
                                              (num-with-ordinal-indicator
                                               (string-to-number
-                                               (inc-property-get "COUNT")))))))
+                                               (get-property "$COUNT")))))))
 
            (src-prop              (org-entry-properties))
            (src-tag-str           (org-get-tags-string))
@@ -210,7 +240,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
            (tgt-props             (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
            (archive-source-p      (or (plist-get args :archive)      nil))
            (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
-           (target-name-fmt       (or (plist-get args :format)       (or (get-property "TEMPLATE") (cdr (assoc-string "ITEM" src-prop))))))
+           (target-name-fmt       (or (plist-get args :format)       (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" src-prop))))))
 
       (when (or cleanup-properties-p archive-source-p)
         (mapc #'(lambda (property)
@@ -333,11 +363,12 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 \"Test\" will block until all entries tagged \"test\" and
 \"mine\" in the agenda files are marked DONE."
-  (setq scope (or scope 'agenda))
-  (org-map-entries
-   ;; Find all entries in the agenda files that match the given tag.
-   (lambda nil (point-marker))
-   match-spec scope skip))
+  (when match-spec
+    (setq scope (or scope 'agenda))
+    (org-map-entries
+     ;; Find all entries in the agenda files that match the given tag.
+     (lambda nil (point-marker))
+     match-spec scope skip)))
 #+END_SRC
 *** Select wrapper
 #+BEGIN_SRC emacs-lisp
@@ -373,7 +404,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 *** Nearest scheduling
 #+BEGIN_SRC emacs-lisp
 (defun ledna-advanced-schedule (&optional target)
-  (when-let (schedule-prop (get-property "SCHEDULE"))
+  (when-let (schedule-prop (get-property "$SCHEDULE"))
     (let* ((schedule (cadr (read schedule-prop)))
            (next-time (get-nearest-date schedule)))
       (set-scheduled next-time target)
@@ -447,11 +478,12 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 * Defaults
 ** Hometasks
 #+BEGIN_SRC emacs-lisp
-(defun set-hometask-deadline (marker)
-  (when-let (schedule-prop (get-property "SCHEDULE"))
-    (let* ((schedule (cadr (read schedule-prop)))
-           (next-time (get-nearest-date schedule)))
-      (set-deadline next-time marker))))
+(defun set-hometask-deadline ()
+  (when-let (hometask-entries (select (tags (get-property "$HOMETASK"))))
+    (when-let (schedule-prop (get-property "$SCHEDULE"))
+      (let* ((schedule (cadr (read schedule-prop)))
+             (next-time (get-nearest-date schedule)))
+        (set-deadline next-time hometask-entries)))))
 #+END_SRC
 ** Counters
 #+BEGIN_SRC emacs-lisp
