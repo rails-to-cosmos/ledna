@@ -10,13 +10,27 @@
         (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
         (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
         (  Clone             ((*->DONE    (ledna-clone)))                        10)
-        (  Cleanup           ((*->DONE    (message "Cleanup properties!")))      100)))
+
+        (  Cleanup           ((*->DONE    (delete-entry-properties)))            100)))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
 
 (defun ledna/magic-tags-list ()
-  (mapcar #'car ledna/magic-tags))
+  (mapcar #'car (ledna/magic-tags-sorted)))
+
+(defun apply-ledna-forms (org-props-keys pom)
+  (ledna-run change-plist
+    (when-let ((org-props-vals (mapcar #'(lambda (f) (org-entry-get pom f org-edna-use-inheritance)) org-props-keys)))
+      ;; Magic tags support
+      (let* ((src-org-tags (mapcar #'intern (org-get-tags))))
+        (dolist (tag (ledna/magic-tags-list))
+          (when (member tag src-org-tags)
+            (let ((tag-magic-props (car (alist-get tag ledna/magic-tags))))
+              (loop for key in org-props-keys
+                    do (when-let (magic-form (car (alist-get (intern key) tag-magic-props)))
+                         (eval magic-form)))))))
+      (mapc #'(lambda (form) (when form (eval (read form)))) org-props-vals))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -24,60 +38,25 @@
 See `org-edna-run' for CHANGE-PLIST explanation.
 
 This shouldn't be run from outside of `org-trigger-hook'."
-  (cl-flet* ((set-magic-props (pl)
-                 (loop for (k v) in pl do
-                       (set-property (symbol-name k) (prin1-to-string v))))
+  (let* ((pos (plist-get change-plist :position))
+         (type (plist-get change-plist :type))
 
-             (del-magic-props (pl)
-                 (loop for (k v) in pl do
-                       (org-delete-property (symbol-name k))))
+         (to* (or (plist-get change-plist :to) ""))
+         (from* (or (plist-get change-plist :from) ""))
 
-             (apply-ledna-forms (tpl pos)
-                 (ledna-run change-plist
-                     (when-let ((forms
-                         (remove 'nil (mapcar #'(lambda (tpl) (org-entry-get pos tpl org-edna-use-inheritance)) tpl))))
-                       (mapc #'(lambda (form) (eval (read form))) forms))))
+         (to (cond ((symbolp to*) (symbol-name to*))
+                   ((stringp to*) (substring-no-properties to*))))
+         (from (cond ((symbolp from*) (symbol-name from*))
+                     ((stringp from*) (substring-no-properties from*))))
 
-             (set-org-props (pl)
-                 (loop for (k v) in pl
-                       do (cond
-                           ((or (null v)
-                                (and (string= "CATEGORY" k) (string= "???" v)))
-                            (org-delete-property k))
-                           (t (set-property k v))))))
+         (prop-templates
+          (list (format "%s->%s" from to)
+                (format "%s->*" from)
+                (format "*->%s" to)
+                "*"
+                "*->*")))
 
-    (let* ((pos (plist-get change-plist :position))
-           (type (plist-get change-plist :type))
-
-           (src-org-tags (mapcar #'intern (org-get-tags)))
-           (src-org-prop-keys (mapcar #'car (org-entry-properties nil 'standard)))
-           (src-org-prop-vals (mapcar #'get-property src-org-prop-keys))
-           (src-org-prop-alist (mapcar* #'list src-org-prop-keys src-org-prop-vals))
-
-           (to* (or (plist-get change-plist :to) ""))
-           (from* (or (plist-get change-plist :from) ""))
-
-           (to (cond ((symbolp to*) (symbol-name to*))
-                     ((stringp to*) (substring-no-properties to*))))
-           (from (cond ((symbolp from*) (symbol-name from*))
-                       ((stringp from*) (substring-no-properties from*))))
-
-           (prop-templates
-            (list (format "%s->%s" from to) (format "%s->*" from)
-                  (format "*->%s" to) "*" "*->*")))
-
-      ;; Support magic tags
-      (let ((magic-tags (ledna/magic-tags-sorted)))
-        (dolist (tag src-org-tags)
-          (when-let (tag-params (alist-get tag magic-tags))
-            (let ((tag-magic-props (car tag-params)))
-              (set-magic-props tag-magic-props)
-              (unwind-protect
-                  (apply-ledna-forms prop-templates pos)
-                (del-magic-props tag-magic-props)
-                (set-org-props src-org-prop-alist))))))
-
-      (apply-ledna-forms prop-templates pos))))
+    (apply-ledna-forms prop-templates pos)))
 
 (defun ledna-blocker-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -182,47 +161,24 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (org-back-to-heading)
 
     (let* ((src-entry             (or (plist-get args :source)       (self)))
-
-           (target-name-fmt-args  (or (plist-get args :args)
-                                      (list
-                                       (cons "ledna-times"
-                                             (num-with-ordinal-indicator
-                                              (string-to-number
-                                               (get-property "$COUNT")))))))
-
-           (src-prop              (org-entry-properties))
-           (src-tag-str           (org-get-tags-string))
+           (src-props             (org-entry-properties))
+           (src-tags-string       (org-get-tags-string))
 
            (todo-state            (or (plist-get args :todo-state)   "TODO"))
-           (tgt-props             (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard))))
-           (archive-source-p      (or (plist-get args :archive)      nil))
-           (cleanup-properties-p  (or (plist-get args :cleanup)      nil))
-           (target-name-fmt       (or (plist-get args :format)       (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" src-prop))))))
-
-      (when (or cleanup-properties-p archive-source-p)
-        (mapc #'(lambda (property)
-                  (org-delete-property (car property))) src-prop))
+           (target-props          (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard)))))
 
       (org-insert-heading-respect-content)
-      (insert (s-format target-name-fmt 'aget target-name-fmt-args) " " src-tag-str)
+      (insert (cdr (assoc-string "ITEM" src-props)) " " src-tags-string)
 
       ;; Copy properties
-      (mapc #'(lambda (property)
-                (when-let (p (assoc-string property src-prop))
+      (mapc #'(lambda (prop)
+                (when-let (p (assoc-string prop src-props))
                     (condition-case nil
                         (set-property (car p) (cdr p))
                       (error nil))))
-            tgt-props)
+            target-props)
 
-      (set-todo-state todo-state)
-
-      ;; Archive source
-      (when archive-source-p
-        (mapc #'(lambda (marker)
-                  (save-excursion
-                    (org-goto-marker-or-bmk marker)
-                    (org-archive-subtree)))
-              src-entry)))))
+      (set-todo-state todo-state))))
 
 (defun set-property (property value &optional target)
   (dolist (mark (or target (self)))
@@ -257,6 +213,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (defun inc-property-get (property &rest args)
   (apply #'inc-property (append (list property) args))
   (get-property property))
+
+(defun delete-entry-properties (&optional pom)
+  (mapc #'(lambda (p) (org-delete-property (car p)))
+        (org-entry-properties nil 'standard)))
 
 (defun get-todo-state (&optional marker)
   (let ((mark (car (or marker (self)))))
