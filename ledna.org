@@ -489,7 +489,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 (provide 'ledna)
 #+END_SRC
 * Known issues
-** TODO ledna-clone arhive issue with DONE logging
+* Todo list
+** TODO CONST special property?
 * COMMENT Local Variables
 # Local Variables:
 # firestarter: (org-babel-tangle)
