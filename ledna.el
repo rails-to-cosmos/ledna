@@ -191,17 +191,18 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (numberp (car (read-from-string string))))
 
 (defun ledna-entry-name-from-template ()
-  (org-back-to-heading)
-  (org-beginning-of-line)
-  (org-kill-line)
+  (when-let ((template (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
+    (org-back-to-heading)
+    (org-beginning-of-line)
+    (org-kill-line)
 
-  (let ((entry-name-format (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties)))))
-        (entry-name-fmt-args  (list
-                               (cons "ledna-times"
-                                     (num-with-ordinal-indicator
-                                      (string-to-number
-                                       (or (get-property "$COUNT") "1")))))))
-    (insert (s-format entry-name-format 'aget entry-name-fmt-args))))
+    (let ((entry-name-format template)
+          (entry-name-fmt-args  (list
+                                 (cons "ledna-times"
+                                       (num-with-ordinal-indicator
+                                        (string-to-number
+                                         (or (get-property "$COUNT") "1")))))))
+      (insert (s-format entry-name-format 'aget entry-name-fmt-args)))))
 
 (require 's)
 
