@@ -24,11 +24,20 @@
 
         (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)))
 
+(setq ledna/complex-tags
+      '(;; Complex tag       Tags
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup))))
+
+;; (alist-get 'Repeated_Task ledna/complex-tags)
+
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
 
 (defun ledna/magic-tags-list ()
   (mapcar #'car (ledna/magic-tags-sorted)))
+
+(defun ledna/complex-tags-list ()
+  (mapcar #'car ledna/complex-tags))
 #+END_SRC
 ** TODO Effort logging (goto-char org-clock-marker)
 SCHEDULED: <2018-05-13 Sun 13:00>
@@ -56,33 +65,54 @@ SCHEDULED: <2018-05-13 Sun 13:00>
 * Core
 ** Wrapper
 #+BEGIN_SRC emacs-lisp
-(defun apply-ledna-forms (org-props-keys pom)
+(defun ledna/eval-forms (forms)
+  (unwind-protect
+      (mapc #'(lambda (f) (when f (eval (read f)))) forms)
+    t))
+
+(defun ledna/get-entry-values-by-keys (pom keys)
+  (remove 'nil (mapcar #'(lambda (f) (org-entry-get pom f org-edna-use-inheritance)) keys)))
+
+(defun ledna/apply-magic-tag (tag keys)
+  (let* ((mt-params (alist-get tag ledna/magic-tags))
+         (mt-priority (cadr mt-params))
+         (mt-props (car mt-params)))
+    (loop for key in keys
+          do (when-let (magic-form (car (alist-get (intern key) mt-props)))
+               (eval magic-form)))
+    mt-priority))
+
+(defun apply-ledna-forms (entry-keys pom)
   (ledna-run change-plist
-    (let (main-block-evaled-p)
-      (cl-flet ((eval-main-block (forms)
-                 (when (not main-block-evaled-p)
-                   (unwind-protect
-                       (mapc #'(lambda (form) (when form (eval (read form)))) forms)
-                     (setq main-block-evaled-p t)))))
 
-        (when-let ((org-props-vals (mapcar #'(lambda (f) (org-entry-get pom f org-edna-use-inheritance)) org-props-keys)))
+    (let (entry-props-evaled-p
+          (mtags-list (ledna/magic-tags-list))
+          (cpx-tags-list (ledna/complex-tags-list))
+          (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
+          (src-org-tags (mapcar #'intern (org-get-tags))))
 
-          ;; Magic tags support
-          (let* ((src-org-tags (mapcar #'intern (org-get-tags))))
-            (dolist (tag (ledna/magic-tags-list))
-              (when (member tag src-org-tags)
-                (let* ((mt-params (alist-get tag ledna/magic-tags))
-                       (mt-priority (cadr mt-params))
-                       (mt-props (car mt-params)))
+      (cl-flet ((apply-magic-tag-consider-priority (tag keys vals)
+                    (let ((mt-priority (ledna/apply-magic-tag tag keys)))
+                      (when (and entry-vals
+                                 (not entry-props-evaled-p)
+                                 (>= mt-priority 100))
+                        (ledna/eval-forms vals)
+                        (setq entry-props-evaled-p t)))))
 
-                  (when (>= mt-priority 100)
-                    (eval-main-block org-props-vals))
+        ;; Process simple tags
+        (dolist (tag mtags-list)
+          (when (member tag src-org-tags)
+            (apply-magic-tag-consider-priority tag entry-keys entry-vals)))
 
-                  (loop for key in org-props-keys
-                        do (when-let (magic-form (car (alist-get (intern key) mt-props)))
-                             (eval magic-form)))))))
+        ;; Process complex tags without priority
+        (dolist (tag src-org-tags)
+          (when (member tag cpx-tags-list)
+            (let* ((sm-tags (car (alist-get tag ledna/complex-tags))))
+              (dolist (tag sm-tags)
+                (apply-magic-tag-consider-priority tag entry-keys entry-vals))))))
 
-          (eval-main-block org-props-vals))))))
+      (when (and entry-vals (not entry-props-evaled-p))
+        (ledna/eval-forms entry-vals)))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
