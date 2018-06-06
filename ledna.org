@@ -26,9 +26,7 @@
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock))))
-
-;; (alist-get 'Repeated_Task ledna/complex-tags)
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename))))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
@@ -105,12 +103,12 @@ SCHEDULED: <2018-05-13 Sun 13:00>
             (let* ((sm-tags (car (alist-get src-tag ledna/complex-tags))))
               (dolist (tag mtags-list)
                 (when (member tag sm-tags)
-                  (apply-magic-tag-consider-priority tag entry-keys entry-vals)))))))
+                  (apply-magic-tag-consider-priority tag entry-keys entry-vals))))))
 
         ;; Process simple tags
         (dolist (tag mtags-list)
           (when (member tag src-org-tags)
-            (apply-magic-tag-consider-priority tag entry-keys entry-vals)))
+            (apply-magic-tag-consider-priority tag entry-keys entry-vals))))
 
       (when (and entry-vals (not entry-props-evaled-p))
         (ledna/eval-forms entry-vals)))))
