@@ -19,8 +19,8 @@
         (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)))
 
 (setq ledna/complex-tags
-      '(;; Complex tag       Tags
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup))))
+      '(;; Complex tag       Features
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock))))
 
 ;; (alist-get 'Repeated_Task ledna/complex-tags)
 
@@ -67,17 +67,18 @@
                         (ledna/eval-forms vals)
                         (setq entry-props-evaled-p t)))))
 
+        ;; Process complex tags
+        (dolist (src-tag src-org-tags)
+          (when (member src-tag cpx-tags-list)
+            (let* ((sm-tags (car (alist-get src-tag ledna/complex-tags))))
+              (dolist (tag mtags-list)
+                (when (member tag sm-tags)
+                  (apply-magic-tag-consider-priority tag entry-keys entry-vals)))))))
+
         ;; Process simple tags
         (dolist (tag mtags-list)
           (when (member tag src-org-tags)
             (apply-magic-tag-consider-priority tag entry-keys entry-vals)))
-
-        ;; Process complex tags without priority
-        (dolist (tag src-org-tags)
-          (when (member tag cpx-tags-list)
-            (let* ((sm-tags (car (alist-get tag ledna/complex-tags))))
-              (dolist (tag sm-tags)
-                (apply-magic-tag-consider-priority tag entry-keys entry-vals))))))
 
       (when (and entry-vals (not entry-props-evaled-p))
         (ledna/eval-forms entry-vals)))))
