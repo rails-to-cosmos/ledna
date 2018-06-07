@@ -1,36 +1,3 @@
-;; priority list of magic tags
-;; greater priorities mean latter execution
-(setq ledna/magic-tags
-      '(;; Tag                Status       Handler                               Priority
-
-        ;; Constructors
-        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
-        (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
-
-        ;; Destructors
-        (  Classwork         ((*->DONE    (set-hometask-deadline)))              1)
-        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
-        (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
-
-        (  Clone             ((*->DONE    (ledna-clone)))                        10)
-
-        ;; User-defined properties are executed with priority = 100
-
-        (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)))
-
-(setq ledna/complex-tags
-      '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename))))
-
-(defun ledna/magic-tags-sorted ()
-  (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
-
-(defun ledna/magic-tags-list ()
-  (mapcar #'car (ledna/magic-tags-sorted)))
-
-(defun ledna/complex-tags-list ()
-  (mapcar #'car ledna/complex-tags))
-
 (defun ledna/eval-forms (forms)
   (unwind-protect
       (mapc #'(lambda (f) (when f (eval (read f)))) forms)
@@ -189,6 +156,39 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; Can't use string-to-number, because it returns 0 if STRING isn't a
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
+
+;; priority list of magic tags
+;; greater priorities mean latter execution
+(setq ledna/magic-tags
+      '(;; Tag                Status       Handler                               Priority
+
+        ;; Constructors
+        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
+        (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
+
+        ;; Destructors
+        (  Classwork         ((*->DONE    (set-hometask-deadline)))              1)
+        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
+        (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
+
+        (  Clone             ((*->DONE    (ledna-clone)))                        10)
+
+        ;; User-defined properties are executed with priority = 100
+
+        (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)))
+
+(setq ledna/complex-tags
+      '(;; Complex tag       Features
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename))))
+
+(defun ledna/magic-tags-sorted ()
+  (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
+
+(defun ledna/magic-tags-list ()
+  (mapcar #'car (ledna/magic-tags-sorted)))
+
+(defun ledna/complex-tags-list ()
+  (mapcar #'car ledna/complex-tags))
 
 (defun ledna-entry-name-from-template ()
   (when-let ((template (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
