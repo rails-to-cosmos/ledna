@@ -209,11 +209,12 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         ;; User-defined properties are executed with priority = 100
 
         (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)
-        (  Archive_Me        ((*->DONE    (try-to-archive-me)))                  1001)))
+        (  Archive_Me        ((*->DONE    (org-archive-subtree)))                1001)
+        (  Archive_Maybe     ((*->DONE    (try-to-archive-me)))                  1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename Hometask_Deadline Archive_Me))))
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename Hometask_Deadline Archive_Maybe))))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
