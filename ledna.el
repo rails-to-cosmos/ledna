@@ -167,7 +167,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
 
         ;; Destructors
-        (  Classwork         ((*->DONE    (set-hometask-deadline)))              1)
+        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))              1)
         (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
         (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
 
@@ -179,7 +179,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename))))
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename Hometask_Deadline))))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
@@ -417,11 +417,12 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
 (defun set-hometask-deadline ()
-  (when-let (hometask-entries (select (tags (get-property "$HOMETASK"))))
+  (when (get-property "$HOMETASK")
+    (when-let (hometask-entries (select (tags (get-property "$HOMETASK"))))
     (when-let (schedule-prop (get-property "$SCHEDULE"))
       (let* ((schedule (cadr (read schedule-prop)))
              (next-time (get-nearest-date schedule)))
-        (set-deadline next-time hometask-entries)))))
+        (set-deadline next-time hometask-entries))))))
 
 (defmacro ledna-counter (countable counter &optional target unit)
   `(when-let (inc (cond ((stringp ,countable) (get-property ,countable ,target))
