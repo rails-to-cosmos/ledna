@@ -175,11 +175,12 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
         ;; User-defined properties are executed with priority = 100
 
-        (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)))
+        (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)
+        (  Archive_Me        ((*->DONE    (try-to-archive-me)))                  1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename Hometask_Deadline))))
+        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename Hometask_Deadline Archive_Me))))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
@@ -265,7 +266,9 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (get-property property))
 
 (defun delete-entry-properties (&optional pom)
-  (mapc #'(lambda (p) (org-delete-property (car p)))
+  (mapc #'(lambda (p) (let ((pname (car p)))
+                   (when (not (string= pname "$ARCHIVE"))
+                     (org-delete-property pname))))
         (org-entry-properties nil 'standard)))
 
 (defun get-todo-state (&optional marker)
@@ -415,6 +418,11 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              (org-add-planning-info 'deadline ts)
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
+
+(defun try-to-archive-me ()
+  (when (string= (get-property "$ARCHIVE") "t")
+    (org-delete-property "$ARCHIVE")
+    (org-archive-subtree)))
 
 (defun set-hometask-deadline ()
   (when (get-property "$HOMETASK")
