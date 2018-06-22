@@ -171,17 +171,22 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
         (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
 
-        (  Clone             ((*->DONE    (ledna-clone)))                        10)
+        (  Clone             ((*->DONE      (ledna-clone))
+                              (*->CANCELLED (ledna-clone)))                      10)
 
         ;; User-defined properties are executed with priority = 100
 
-        (  Cleanup           ((*->DONE    (delete-entry-properties)))            1000)
-        (  Archive_Me        ((*->DONE    (org-archive-subtree)))                1001)
-        (  Archive_Maybe     ((*->DONE    (try-to-archive-me)))                  1001)))
+        (  Cleanup           ((*->DONE      (delete-entry-properties)))          1000)
+        (  Archive_Me        ((*->DONE      (org-archive-subtree))
+                              (*->CANCELLED (org-archive-subtree)))              1001)
+        (  Archive_Maybe     ((*->DONE      (try-to-archive-me))
+                              (*->CANCELLED (try-to-archive-me)))                1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule Clone Cleanup Effort_Clock Counter Rename Hometask_Deadline Archive_Maybe))))
+        (  Repeated_Task     (Advanced_Schedule
+                              Clone Cleanup Effort_Clock Counter
+                              Rename Hometask_Deadline Archive_Maybe))))
 
 (defun ledna/magic-tags-sorted ()
   (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
