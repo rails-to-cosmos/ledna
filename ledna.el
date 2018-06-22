@@ -176,7 +176,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
         ;; User-defined properties are executed with priority = 100
 
-        (  Cleanup           ((*->DONE      (delete-entry-properties)))          1000)
+        (  Cleanup           ((*->DONE      (delete-entry-properties))
+                              (*->CANCELLED (delete-entry-properties)))          1000)
         (  Archive_Me        ((*->DONE      (org-archive-subtree))
                               (*->CANCELLED (org-archive-subtree)))              1001)
         (  Archive_Maybe     ((*->DONE      (try-to-archive-me))
