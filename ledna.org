@@ -274,7 +274,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                       (error nil))))
             target-props)
 
-      (set-todo-state todo-state))))
+      (set-todo-state todo-state))
+    (org-align-all-tags)))
 #+END_SRC
 ** Properties
 #+BEGIN_SRC emacs-lisp

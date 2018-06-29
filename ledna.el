@@ -157,46 +157,46 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
 
-;; priority list of magic tags
-;; greater priorities mean latter execution
-(setq ledna/magic-tags
-      '(;; Tag                Status       Handler                               Priority
+    ;; priority list of magic tags
+    ;; greater priorities mean latter execution
+    (setq ledna/magic-tags
+          '(;; Tag                Status       Handler                               Priority
 
-        ;; Constructors
-        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
-        (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
+            ;; Constructors
+            (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
+            (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
 
-        ;; Destructors
-        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))              1)
-        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
-        (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
+            ;; Destructors
+            (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))              1)
+            (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
+            (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
 
-        (  Clone             ((*->DONE      (ledna-clone))
-                              (*->CANCELLED (ledna-clone)))                      10)
+            (  Clone             ((*->DONE      (ledna-clone))
+                                  (*->CANCELLED (ledna-clone)))                      10)
 
-        ;; User-defined properties are executed with priority = 100
+            ;; User-defined properties are executed with priority = 100
 
-        (  Cleanup           ((*->DONE      (delete-entry-properties))
-                              (*->CANCELLED (delete-entry-properties)))          1000)
-        (  Archive_Me        ((*->DONE      (org-archive-subtree))
-                              (*->CANCELLED (org-archive-subtree)))              1001)
-        (  Archive_Maybe     ((*->DONE      (try-to-archive-me))
-                              (*->CANCELLED (try-to-archive-me)))                1001)))
+            (  Cleanup           ((*->DONE      (delete-entry-properties))
+                                  (*->CANCELLED (delete-entry-properties)))          1000)
+            (  Archive_Me        ((*->DONE      (org-archive-subtree))
+                                  (*->CANCELLED (org-archive-subtree)))              1001)
+            (  Archive_Maybe     ((*->DONE      (try-to-archive-me))
+                                  (*->CANCELLED (try-to-archive-me)))                1001)))
 
-(setq ledna/complex-tags
-      '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule
-                              Clone Cleanup Effort_Clock Counter
-                              Rename Hometask_Deadline Archive_Maybe))))
+    (setq ledna/complex-tags
+          '(;; Complex tag       Features
+            (  Repeated_Task     (Advanced_Schedule
+                                  Clone Cleanup Effort_Clock Counter
+                                  Rename Hometask_Deadline Archive_Maybe))))
 
-(defun ledna/magic-tags-sorted ()
-  (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
+    (defun ledna/magic-tags-sorted ()
+      (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
 
-(defun ledna/magic-tags-list ()
-  (mapcar #'car (ledna/magic-tags-sorted)))
+    (defun ledna/magic-tags-list ()
+      (mapcar #'car (ledna/magic-tags-sorted)))
 
-(defun ledna/complex-tags-list ()
-  (mapcar #'car ledna/complex-tags))
+    (defun ledna/complex-tags-list ()
+      (mapcar #'car ledna/complex-tags))
 
 (defun ledna-entry-name-from-template ()
   (when-let ((template (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
@@ -236,7 +236,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                       (error nil))))
             target-props)
 
-      (set-todo-state todo-state))))
+      (set-todo-state todo-state))
+    (org-align-all-tags)))
 
 (defun set-property (property value &optional target)
   (dolist (mark (or target (self)))
