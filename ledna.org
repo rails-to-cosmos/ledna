@@ -215,8 +215,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
             (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
 
             ;; User-defined properties are executed with priority = 100
-
+            ;; So do not confuse yourself:
+            ;; use tags that change properties after user-defined triggers.
             (  Counter           ((*->DONE      (inc-property "$COUNT")))            110)
+
             (  Clone             ((*->DONE      (ledna-clone))
                                   (*->CANCELLED (ledna-clone)))                      120)
             (  Cleanup           ((*->DONE      (delete-entry-properties))
