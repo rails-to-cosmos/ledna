@@ -24,27 +24,29 @@
           (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
           (src-org-tags (mapcar #'intern (org-get-tags))))
 
-      (cl-flet ((apply-magic-tag-consider-priority (tag keys vals)
-                    (let ((mt-priority (ledna/apply-magic-tag tag keys)))
-                      (when (and entry-vals
-                                 (not entry-props-evaled-p)
-                                 (>= mt-priority 100))
-                        (ledna/eval-forms vals)
-                        (setq entry-props-evaled-p t)))))
+      (cl-flet ((apply-magic-tag-consider-priority (tag priority keys vals)
+                  (progn
+                    (when (and entry-vals (not entry-props-evaled-p) (>= priority 100))
+                      (ledna/eval-forms vals)
+                      (setq entry-props-evaled-p t))
+                    (ledna/apply-magic-tag tag keys))))
 
         ;; Process complex tags
         (dolist (src-tag src-org-tags)
           (when (member src-tag cpx-tags-list)
             (let* ((sm-tags (car (alist-get src-tag ledna/complex-tags))))
-              (dolist (tag mtags-list)
-                (when (member tag sm-tags)
-                  (apply-magic-tag-consider-priority tag entry-keys entry-vals))))))
+              (loop for (tag priority)
+                    in (ledna/tags-prioritized mtags-list)
+                    when (member tag sm-tags)
+                    do (apply-magic-tag-consider-priority tag priority entry-keys entry-vals)))))
 
-        ;; Process simple tags
-        (dolist (tag mtags-list)
-          (when (member tag src-org-tags)
-            (apply-magic-tag-consider-priority tag entry-keys entry-vals))))
+        ;; Process simple tags (minor copy-paste)
+        (loop for (tag priority)
+              in (ledna/tags-prioritized mtags-list)
+              when (member tag src-org-tags)
+              do (apply-magic-tag-consider-priority tag priority entry-keys entry-vals)))
 
+      ;; Process user properties
       (when (and entry-vals (not entry-props-evaled-p))
         (ledna/eval-forms entry-vals)))))
 
@@ -149,6 +151,12 @@ ORIG-FUN is a trigger function called with ARGS."
 ORIG-FUN is a blocker function called with ARGS."
   (apply ledna-dsl-blocker-handler args))
 
+(defun ledna-map (handler marks)
+  (save-excursion
+    (dolist (mark marks)
+      (org-goto-marker-or-bmk mark)
+      (funcall handler))))
+
 (defun string-is-numeric-p (string)
   "Return non-nil if STRING is a valid numeric string.
 
@@ -169,13 +177,12 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
             ;; Destructors
             (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))              1)
             (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
-            (  Counter           ((*->DONE    (inc-property "$COUNT")))              1)
-
-            (  Clone             ((*->DONE      (ledna-clone))
-                                  (*->CANCELLED (ledna-clone)))                      10)
 
             ;; User-defined properties are executed with priority = 100
 
+            (  Counter           ((*->DONE      (inc-property "$COUNT")))            110)
+            (  Clone             ((*->DONE      (ledna-clone))
+                                  (*->CANCELLED (ledna-clone)))                      120)
             (  Cleanup           ((*->DONE      (delete-entry-properties))
                                   (*->CANCELLED (delete-entry-properties)))          1000)
             (  Archive_Me        ((*->DONE      (org-archive-subtree))
@@ -188,6 +195,15 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
             (  Repeated_Task     (Advanced_Schedule
                                   Clone Cleanup Effort_Clock Counter
                                   Rename Hometask_Deadline Archive_Maybe))))
+
+    (defun ledna/tags-prioritized (tags)
+      (loop for (name (status header) priority)
+            in (ledna/magic-tags-sorted)
+            when (member name tags)
+            collect (list name priority)))
+
+    (defun ledna/magic-tag-get-priority (tag)
+      (cadr (alist-get 'Cleanup ledna/magic-tags)))
 
     (defun ledna/magic-tags-sorted ()
       (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
@@ -205,11 +221,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (org-kill-line)
 
     (let ((entry-name-format template)
-          (entry-name-fmt-args  (list
-                                 (cons "ledna-times"
-                                       (num-with-ordinal-indicator
-                                        (string-to-number
-                                         (or (get-property "$COUNT") "1")))))))
+          (entry-name-fmt-args  (list (cons "ledna-times" (num-with-ordinal-indicator (string-to-number (or (get-property "$COUNT") "1"))))
+                                      (cons "$COUNT" (string-to-number (or (get-property "$COUNT") "1"))))))
       (insert (s-format entry-name-format 'aget entry-name-fmt-args)))))
 
 (require 's)
