@@ -252,7 +252,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
             target-props)
 
       (set-todo-state todo-state))
-    (org-align-all-tags)))
+    (org-align-all-tags)
+    (org-update-checkbox-count)))
 
 (defun set-property (property value &optional target)
   (dolist (mark (or target (self)))

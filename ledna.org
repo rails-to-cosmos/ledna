@@ -293,7 +293,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
             target-props)
 
       (set-todo-state todo-state))
-    (org-align-all-tags)))
+    (org-align-all-tags)
+    (org-update-checkbox-count)))
 #+END_SRC
 ** Properties
 #+BEGIN_SRC emacs-lisp
