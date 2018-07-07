@@ -151,11 +151,12 @@ ORIG-FUN is a trigger function called with ARGS."
 ORIG-FUN is a blocker function called with ARGS."
   (apply ledna-dsl-blocker-handler args))
 
-(defun ledna-map (handler marks)
+(defun ledna-map (handler &optional marks)
   (save-excursion
-    (dolist (mark marks)
-      (org-goto-marker-or-bmk mark)
-      (funcall handler))))
+    (loop for mark in (or marks (self))
+          do (progn
+               (org-goto-marker-or-bmk mark)
+               (funcall handler)))))
 
 (defun string-is-numeric-p (string)
   "Return non-nil if STRING is a valid numeric string.
@@ -259,35 +260,34 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (org-align-all-tags)
     (org-update-checkbox-count)))
 
+(defun set-property-current ()
+  (org-entry-put mark property
+                 (cond ((numberp value) (number-to-string value))
+                       ((stringp value) value)
+                       (t "Unknown value type"))))
+
 (defun set-property (property value &optional target)
-  (dolist (mark (or target (self)))
-    (org-entry-put
-     mark property
-     (cond ((numberp value) (number-to-string value))
-           ((stringp value) value)
-           (t "Unknown value type")))))
+  (ledna-map #'set-property-current target))
 
 (defun get-property (property &optional target default)
   (let ((mark (cond
-               (target
-                (cond
-                 ((listp target) (car target))
-                 (t target)))
-          (t (car (self))))))
+               (target (cond ((listp target) (car target))
+                             (t target)))
+               (t (car (self))))))
     (or (org-entry-get mark property)
         default)))
 
 (defun inc-property (property &optional val units target)
-  (dolist (mark (or target (self)))
-    (let* ((full-prop-value (get-property property mark "0"))
-           (inc-value (cond ((and (stringp val) (string-is-numeric-p val)) (string-to-number val))
-                            ((numberp val) val)
-                            (t 1)))
-           (prop-number (string-to-number (car (split-string full-prop-value))))
-           (prop-label (or units (key-description (cdr (split-string full-prop-value)))))
-           (result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label))))
-      (set-property property result-value (list mark))
-      result-value)))
+  (loop for mark in (or target (self))
+        do (let* ((full-prop-value (get-property property mark "0"))
+                  (inc-value (cond ((and (stringp val) (string-is-numeric-p val)) (string-to-number val))
+                                   ((numberp val) val)
+                                   (t 1)))
+                  (prop-number (string-to-number (car (split-string full-prop-value))))
+                  (prop-label (or units (key-description (cdr (split-string full-prop-value)))))
+                  (result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label))))
+             (set-property property result-value (list mark))
+             result-value)))
 
 (defun inc-property-get (property &rest args)
   (apply #'inc-property (append (list property) args))
@@ -295,8 +295,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun delete-entry-properties (&optional pom)
   (mapc #'(lambda (p) (let ((pname (car p)))
-                   (when (not (string= pname "$ARCHIVE"))
-                     (org-delete-property pname))))
+                        (when (not (string= pname "$ARCHIVE"))
+                          (org-delete-property pname))))
         (org-entry-properties nil 'standard)))
 
 (defun get-todo-state (&optional marker)
