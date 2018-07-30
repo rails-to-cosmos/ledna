@@ -207,7 +207,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (setq ledna/magic-tags
       '(;; Tag                Status       Handler                               Priority
 
-        (Pending_Inherit     ((*->PENDING (set-todo-state "PENDING" (ledna/$parent)))
+        (  Pending_Inherit   ((*->PENDING (set-todo-state "PENDING" (ledna/$parent)))
                               (PENDING->* (set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
