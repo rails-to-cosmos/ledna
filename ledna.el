@@ -153,7 +153,7 @@ ORIG-FUN is a blocker function called with ARGS."
 
 (defun ledna-map (handler &optional marks)
   (save-excursion
-    (loop for mark in (or marks (self))
+    (loop for mark in (or marks (ledna/$self))
           do (progn
                (org-goto-marker-or-bmk mark)
                (funcall handler)))))
@@ -171,31 +171,34 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (setq ledna/magic-tags
       '(;; Tag                Status       Handler                               Priority
 
+        (Pending_Inherit     ((*->PENDING (set-todo-state "PENDING" (ledna/$parent)))
+                              (PENDING->* (set-todo-state "TODO"    (ledna/$parent)))) 1)
+
         ;; Constructors
-        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))            1)
-        (  Rename            ((->TODO     (ledna-entry-name-from-template)))     1)
+        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))                  1)
+        (  Rename            ((->TODO     (ledna-entry-name-from-template)))           1)
 
         ;; Destructors
-        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))              1)
-        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime))) 1)
+        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))                    1)
+        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime)))       1)
 
         ;; User-defined properties are executed with priority = 100
         ;; So do not confuse yourself:
         ;; use tags that change properties after user-defined triggers.
-        (  Counter           ((*->DONE      (inc-property "$COUNT")))            110)
+        (  Counter           ((*->DONE      (inc-property "$COUNT")))                  110)
 
         (  Clone             ((*->DONE      (ledna-clone))
-                              (*->CANCELLED (ledna-clone)))                      120)
+                              (*->CANCELLED (ledna-clone)))                            120)
         (  Cleanup           ((*->DONE      (delete-entry-properties))
-                              (*->CANCELLED (delete-entry-properties)))          1000)
+                              (*->CANCELLED (delete-entry-properties)))                1000)
 
         ;; Warning!
         ;; Archive feature does not work properly with LOGBOOK changing cases:
         ;; LOGBOOK appends to next or cloned entry
         (  Archive_Me        ((*->DONE      (org-archive-subtree))
-                              (*->CANCELLED (org-archive-subtree)))              1001)
+                              (*->CANCELLED (org-archive-subtree)))                    1001)
         (  Archive_Maybe     ((*->DONE      (try-to-archive-me))
-                              (*->CANCELLED (try-to-archive-me)))                1001)))
+                              (*->CANCELLED (try-to-archive-me)))                      1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
@@ -238,7 +241,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (save-excursion
     (org-back-to-heading)
 
-    (let* ((src-entry             (or (plist-get args :source)       (self)))
+    (let* ((src-entry             (or (plist-get args :source)       (ledna/$self)))
            (src-props             (org-entry-properties))
            (src-tags-string       (org-get-tags-string))
 
@@ -273,12 +276,12 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (let ((mark (cond
                (target (cond ((listp target) (car target))
                              (t target)))
-               (t (car (self))))))
+               (t (car (ledna/$self))))))
     (or (org-entry-get mark property)
         default)))
 
 (defun inc-property (property &optional val units target)
-  (loop for mark in (or target (self))
+  (loop for mark in (or target (ledna/$self))
         do (let* ((full-prop-value (get-property property mark "0"))
                   (inc-value (cond ((and (stringp val) (string-is-numeric-p val)) (string-to-number val))
                                    ((numberp val) val)
@@ -300,20 +303,23 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         (org-entry-properties nil 'standard)))
 
 (defun get-todo-state (&optional marker)
-  (let ((mark (car (or marker (self)))))
+  (let ((mark (car (or marker (ledna/$self)))))
     (save-excursion
       (with-current-buffer (marker-buffer mark)
         (goto-char mark)
         (substring-no-properties (org-get-todo-state))))))
 
 (defun set-todo-state (state &optional marker)
-  (let ((mark (car (or marker (self)))))
+  (let ((mark (car (or marker (ledna/$self)))))
     (save-mark-and-excursion
       (with-current-buffer (marker-buffer mark)
         (goto-char mark)
         (org-todo state)))))
 
-(defun self ()
+(defun ledna/$parent ()
+  (org-edna-finder/parent))
+
+(defun ledna/$self ()
   (save-excursion
     (org-back-to-heading)
     (list (point-marker))))
@@ -422,7 +428,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 ;; (- (org-time-string-to-seconds (active-timestamp "Mon 09:00")) (time-to-seconds (org-current-time)))
 
 (defun set-scheduled (timestamp &optional marker)
-  (let ((mark (or marker (self))))
+  (let ((mark (or marker (ledna/$self))))
     (save-mark-and-excursion
      (cl-labels
       ((set-scheduled-on (mts)
@@ -435,7 +441,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
     (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
 (defun set-deadline (timestamp &optional marker)
-  (let ((mark (or marker (self))))
+  (let ((mark (or marker (ledna/$self))))
     (save-mark-and-excursion
      (cl-labels
       ((set-scheduled-on (mts)
