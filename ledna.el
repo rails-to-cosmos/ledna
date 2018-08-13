@@ -185,7 +185,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         ;; User-defined properties are executed with priority = 100
         ;; So do not confuse yourself:
         ;; use tags that change properties after user-defined triggers.
-        (  Counter           ((*->DONE      (inc-property "$COUNT")))                  110)
+        (  Counter           ((*->DONE      (ledna/inc-property "$COUNT")))            110)
 
         (  Clone             ((*->DONE      (ledna-clone))
                               (*->CANCELLED (ledna-clone)))                            120)
@@ -225,14 +225,14 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (mapcar #'car ledna/complex-tags))
 
 (defun ledna-entry-name-from-template ()
-  (when-let ((template (or (get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
+  (when-let ((template (or (ledna/get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
     (org-back-to-heading)
     (org-beginning-of-line)
     (org-kill-line)
 
     (let ((entry-name-format template)
-          (entry-name-fmt-args  (list (cons "ledna-times" (num-with-ordinal-indicator (string-to-number (or (get-property "$COUNT") "1"))))
-                                      (cons "$COUNT" (string-to-number (or (get-property "$COUNT") "1"))))))
+          (entry-name-fmt-args  (list (cons "ledna-times" (num-with-ordinal-indicator (string-to-number (or (ledna/get-property "$COUNT") "1"))))
+                                      (cons "$COUNT" (string-to-number (or (ledna/get-property "$COUNT") "1"))))))
       (insert (s-format entry-name-format 'aget entry-name-fmt-args)))))
 
 (require 's)
@@ -255,7 +255,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
       (mapc #'(lambda (prop)
                 (when-let (p (assoc-string prop src-props))
                     (condition-case nil
-                        (set-property (car p) (cdr p))
+                        (ledna/set-property (car p) (cdr p))
                       (error nil))))
             target-props)
 
@@ -263,16 +263,16 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (org-align-all-tags)
     (org-update-checkbox-count)))
 
-(defun set-property-current ()
+(defun ledna/set-property-current ()
   (org-entry-put mark property
                  (cond ((numberp value) (number-to-string value))
                        ((stringp value) value)
                        (t "Unknown value type"))))
 
-(defun set-property (property value &optional target)
-  (ledna-map #'set-property-current target))
+(defun ledna/set-property (property value &optional target)
+  (ledna-map #'ledna/set-property-current target))
 
-(defun get-property (property &optional target default)
+(defun ledna/get-property (property &optional target default)
   (let ((mark (cond
                (target (cond ((listp target) (car target))
                              (t target)))
@@ -280,21 +280,21 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (or (org-entry-get mark property)
         default)))
 
-(defun inc-property (property &optional val units target)
+(defun ledna/inc-property (property &optional val units target)
   (loop for mark in (or target (ledna/$self))
-        do (let* ((full-prop-value (get-property property mark "0"))
+        do (let* ((full-prop-value (ledna/get-property property mark "0"))
                   (inc-value (cond ((and (stringp val) (string-is-numeric-p val)) (string-to-number val))
                                    ((numberp val) val)
                                    (t 1)))
                   (prop-number (string-to-number (car (split-string full-prop-value))))
                   (prop-label (or units (key-description (cdr (split-string full-prop-value)))))
                   (result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label))))
-             (set-property property result-value (list mark))
+             (ledna/set-property property result-value (list mark))
              result-value)))
 
-(defun inc-property-get (property &rest args)
-  (apply #'inc-property (append (list property) args))
-  (get-property property))
+(defun ledna/inc-property-get (property &rest args)
+  (apply #'ledna/inc-property (append (list property) args))
+  (ledna/get-property property))
 
 (defun delete-entry-properties (&optional pom)
   (mapc #'(lambda (p) (let ((pname (car p)))
@@ -365,7 +365,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 ;; TODO (select :ids '(test-pass-purchased-p) :tags '(test_tag))
 
 (defun ledna/consider-effort-as-clocktime ()
-  (if-let (entry-effort (get-property "EFFORT"))
+  (if-let (entry-effort (ledna/get-property "EFFORT"))
       (save-excursion
         (save-restriction
           (org-clock-find-position org-clock-in-resume)
@@ -386,7 +386,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
             (org-clock-update-time-maybe))))))
 
 (defun ledna-advanced-schedule (&optional target)
-  (when-let (schedule-prop (get-property "$SCHEDULE"))
+  (when-let (schedule-prop (ledna/get-property "$SCHEDULE"))
     (let* ((schedule (cadr (read schedule-prop)))
            (next-time (get-nearest-date schedule)))
       (set-scheduled next-time target)
@@ -421,9 +421,9 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
          (encoded-time (apply #'encode-time analyzed-time)))
     (format-time-string (org-time-stamp-format t t) encoded-time)))
 
-;; (set-keyword "SCHEDULED" (active-timestamp (get-nearest-date (cdr (read (get-property "SCHEDULE" (car (ids "test-event"))))))) (select (ids "test-event")))
-;; (set-scheduled (get-nearest-date (cdr (read (get-property "SCHEDULE" (car (ids "test-event")))))) (select (ids "test-event")))
-;; (active-timestamp (get-nearest-date (cadr (read (get-property "SCHEDULE" (car (ids "test-event")))))))
+;; (set-keyword "SCHEDULED" (active-timestamp (get-nearest-date (cdr (read (ledna/get-property "SCHEDULE" (car (ids "test-event"))))))) (select (ids "test-event")))
+;; (set-scheduled (get-nearest-date (cdr (read (ledna/get-property "SCHEDULE" (car (ids "test-event")))))) (select (ids "test-event")))
+;; (active-timestamp (get-nearest-date (cadr (read (ledna/get-property "SCHEDULE" (car (ids "test-event")))))))
 ;; (get-nearest-date (list "Mon 09:00" "Mon 10:00" "Mon 12:00" "Mon 21:00" "Tue 17:00-18:00" "Thu 17:00-18:00" "Sat 13:00-14:00"))
 ;; (- (org-time-string-to-seconds (active-timestamp "Mon 09:00")) (time-to-seconds (org-current-time)))
 
@@ -454,22 +454,22 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
 (defun try-to-archive-me ()
-  (when (string= (get-property "$ARCHIVE") "t")
+  (when (string= (ledna/get-property "$ARCHIVE") "t")
     (org-delete-property "$ARCHIVE")
     (org-archive-subtree)))
 
 (defun set-hometask-deadline ()
-  (when (get-property "$HOMETASK")
-    (when-let (hometask-entries (select (tags (get-property "$HOMETASK"))))
-    (when-let (schedule-prop (get-property "$SCHEDULE"))
+  (when (ledna/get-property "$HOMETASK")
+    (when-let (hometask-entries (select (tags (ledna/get-property "$HOMETASK"))))
+    (when-let (schedule-prop (ledna/get-property "$SCHEDULE"))
       (let* ((schedule (cadr (read schedule-prop)))
              (next-time (get-nearest-date schedule)))
         (set-deadline next-time hometask-entries))))))
 
 (defmacro ledna-counter (countable counter &optional target unit)
-  `(when-let (inc (cond ((stringp ,countable) (get-property ,countable ,target))
+  `(when-let (inc (cond ((stringp ,countable) (ledna/get-property ,countable ,target))
                         ((numberp ,countable) ,countable)))
-     (inc-property ,counter inc ,unit ,target)))
+     (ledna/inc-property ,counter inc ,unit ,target)))
 
 (defun ledna-price-counter (&optional target unit)
   (ledna-counter "PRICE" "Money" target unit))
