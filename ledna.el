@@ -171,8 +171,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (setq ledna/magic-tags
       '(;; Tag                Status       Handler                               Priority
 
-        (  Pending_Inherit   ((*->PENDING (set-todo-state "PENDING" (ledna/$parent)))
-                              (PENDING->* (set-todo-state "TODO"    (ledna/$parent)))) 1)
+        (  Pending_Inherit   ((*->PENDING (ledna/set-todo-state "PENDING" (ledna/$parent)))
+                              (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
         (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))                  1)
@@ -259,7 +259,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                       (error nil))))
             target-props)
 
-      (set-todo-state todo-state))
+      (ledna/set-todo-state todo-state))
     (org-align-all-tags)
     (org-update-checkbox-count)))
 
@@ -280,17 +280,22 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (or (org-entry-get mark property)
         default)))
 
+(defun ledna/circ-property (property limit &optional inc)
+  (let ((i (string-to-number (ledna/get-property property))))
+    (ledna/set-property property (% (+ i (or inc 1)) limit))))
+
 (defun ledna/inc-property (property &optional val units target)
   (loop for mark in (or target (ledna/$self))
+        with result-value
         do (let* ((full-prop-value (ledna/get-property property mark "0"))
                   (inc-value (cond ((and (stringp val) (string-is-numeric-p val)) (string-to-number val))
                                    ((numberp val) val)
                                    (t 1)))
                   (prop-number (string-to-number (car (split-string full-prop-value))))
-                  (prop-label (or units (key-description (cdr (split-string full-prop-value)))))
-                  (result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label))))
-             (ledna/set-property property result-value (list mark))
-             result-value)))
+                  (prop-label (or units (key-description (cdr (split-string full-prop-value))))))
+             (setq result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label)))
+             (ledna/set-property property result-value (list mark)))
+        collect result-value))
 
 (defun ledna/inc-property-get (property &rest args)
   (apply #'ledna/inc-property (append (list property) args))
@@ -302,14 +307,14 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                           (org-delete-property pname))))
         (org-entry-properties nil 'standard)))
 
-(defun get-todo-state (&optional marker)
+(defun ledna/get-todo-state (&optional marker)
   (let ((mark (car (or marker (ledna/$self)))))
     (save-excursion
       (with-current-buffer (marker-buffer mark)
         (goto-char mark)
         (substring-no-properties (org-get-todo-state))))))
 
-(defun set-todo-state (state &optional marker)
+(defun ledna/set-todo-state (state &optional marker)
   (let ((mark (car (or marker (ledna/$self)))))
     (save-mark-and-excursion
       (with-current-buffer (marker-buffer mark)
@@ -390,7 +395,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
     (let* ((schedule (cadr (read schedule-prop)))
            (next-time (get-nearest-date schedule)))
       (set-scheduled next-time target)
-      (set-todo-state "TODO" target)
+      (ledna/set-todo-state "TODO" target)
       (org-entry-put nil "LAST_REPEAT" (format-time-string
 					      (org-time-stamp-format t t)
 					      (current-time))))))
@@ -420,12 +425,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
          (analyzed-time (org-read-date-analyze str default-time decoded-time))
          (encoded-time (apply #'encode-time analyzed-time)))
     (format-time-string (org-time-stamp-format t t) encoded-time)))
-
-;; (set-keyword "SCHEDULED" (active-timestamp (get-nearest-date (cdr (read (ledna/get-property "SCHEDULE" (car (ids "test-event"))))))) (select (ids "test-event")))
-;; (set-scheduled (get-nearest-date (cdr (read (ledna/get-property "SCHEDULE" (car (ids "test-event")))))) (select (ids "test-event")))
-;; (active-timestamp (get-nearest-date (cadr (read (ledna/get-property "SCHEDULE" (car (ids "test-event")))))))
-;; (get-nearest-date (list "Mon 09:00" "Mon 10:00" "Mon 12:00" "Mon 21:00" "Tue 17:00-18:00" "Thu 17:00-18:00" "Sat 13:00-14:00"))
-;; (- (org-time-string-to-seconds (active-timestamp "Mon 09:00")) (time-to-seconds (org-current-time)))
 
 (defun set-scheduled (timestamp &optional marker)
   (let ((mark (or marker (ledna/$self))))
@@ -482,7 +481,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun ledna-touch (&optional target)
   (set-scheduled (active-timestamp "now") target)
-  (set-todo-state "TODO" target))
+  (ledna/set-todo-state "TODO" target))
 
 (defun ledna-money-time-report (&optional target)
   (ledna-time-counter target)
