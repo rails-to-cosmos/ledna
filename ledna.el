@@ -151,6 +151,11 @@ ORIG-FUN is a trigger function called with ARGS."
 ORIG-FUN is a blocker function called with ARGS."
   (apply ledna-dsl-blocker-handler args))
 
+(defun ledna/defer (handler &optional timeout)
+  (run-with-timer (or timeout 5) nil
+                  #'(lambda (h s) (ledna-map h s))
+                  handler (ledna/$self)))
+
 (defun ledna-map (handler &optional marks)
   (save-excursion
     (loop for mark in (or marks (ledna/$self))
@@ -195,10 +200,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         ;; Warning!
         ;; Archive feature does not work properly with LOGBOOK changing cases:
         ;; LOGBOOK appends to next or cloned entry
-        (  Archive_Me        ((*->DONE      (org-archive-subtree))
-                              (*->CANCELLED (org-archive-subtree)))                    1001)
-        (  Archive_Maybe     ((*->DONE      (try-to-archive-me))
-                              (*->CANCELLED (try-to-archive-me)))                      1001)))
+        (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
+                              (*->CANCELLED (ledna/defer 'org-archive-subtree)))       1001)
+        (  Archive_Maybe     ((*->DONE      (ledna/defer 'try-to-archive-me))
+                              (*->CANCELLED (ledna/defer 'try-to-archive-me)))         1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
