@@ -280,6 +280,9 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (or (org-entry-get mark property)
         default)))
 
+(defun ledna/get-title (&optional target default)
+  (ledna/get-property "ITEM" target default))
+
 (defun ledna/circ-property (property limit &optional inc)
   (let ((i (string-to-number (ledna/get-property property))))
     (ledna/set-property property (% (+ i (or inc 1)) limit))))
