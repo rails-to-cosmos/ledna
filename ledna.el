@@ -151,17 +151,32 @@ ORIG-FUN is a trigger function called with ARGS."
 ORIG-FUN is a blocker function called with ARGS."
   (apply ledna-dsl-blocker-handler args))
 
-(defun ledna/defer (handler &optional timeout)
-  (run-with-timer (or timeout 5) nil
-                  #'(lambda (h s) (ledna-map h s))
-                  handler (ledna/$self)))
+;; one or many
+(defun ledna/oom (items)
+  (if (and (listp items) (= (length items) 1))
+      (car items)
+    items))
 
-(defun ledna-map (handler &optional marks)
+;; marker or self
+(defun ledna/mos (&optional marker-or-markers)
+  (or marker-or-markers (ledna/$self)))
+
+(defun ledna/markers (&optional marker-or-markers)
+  (let* ((marker (ledna/mos marker-or-markers))
+         (markers (if (markerp marker) (list marker) marker)))
+    markers))
+
+(defun ledna/defer (handler &optional marker timeout)
+  (run-with-timer (or timeout 5) nil
+                  #'(lambda (h s) (ledna/map h s))
+                  handler (ledna/mos marker)))
+
+(defun ledna/map (handler &optional marker)
   (save-excursion
-    (loop for mark in (or marks (ledna/$self))
-          do (progn
-               (org-goto-marker-or-bmk mark)
-               (funcall handler)))))
+    (loop for mark in (ledna/markers marker)
+            collect (progn
+                      (org-goto-marker-or-bmk mark)
+                      (funcall handler)))))
 
 (defun string-is-numeric-p (string)
   "Return non-nil if STRING is a valid numeric string.
@@ -248,10 +263,11 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
     (let* ((src-entry             (or (plist-get args :source)       (ledna/$self)))
            (src-props             (org-entry-properties))
+           (src-props-std         (org-entry-properties nil 'standard))
+           (src-props-std-keys    (mapcar #'car src-props-std))
            (src-tags-string       (org-get-tags-string))
-
            (todo-state            (or (plist-get args :todo-state)   "TODO"))
-           (target-props          (or (plist-get args :properties)   (mapcar #'car (org-entry-properties nil 'standard)))))
+           (target-props          (or (plist-get args :properties)   src-props-std-keys)))
 
       (org-insert-heading-respect-content)
       (insert (cdr (assoc-string "ITEM" src-props)) " " src-tags-string)
@@ -268,22 +284,18 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (org-align-all-tags)
     (org-update-checkbox-count)))
 
-(defun ledna/set-property-current ()
-  (org-entry-put mark property
-                 (cond ((numberp value) (number-to-string value))
-                       ((stringp value) value)
-                       (t "Unknown value type"))))
+(defun ledna/set-property (property value &optional marker)
+  (flet ((set-current-prop () (org-entry-put marker property
+                                             (cond ((numberp value) (number-to-string value))
+                                                   ((stringp value) value)
+                                                   (t "Unknown value type")))))
+    (ledna/map #'set-current-prop marker)))
 
-(defun ledna/set-property (property value &optional target)
-  (ledna-map #'ledna/set-property-current target))
-
-(defun ledna/get-property (property &optional target default)
-  (let ((mark (cond
-               (target (cond ((listp target) (car target))
-                             (t target)))
-               (t (car (ledna/$self))))))
-    (or (org-entry-get mark property)
-        default)))
+(defun ledna/get-property (property &optional marker default)
+  (ledna/oom (loop for mark in (ledna/markers marker)
+                   for val = (or (org-entry-get mark property) default)
+                   when (not (eq val nil))
+                   collect val)))
 
 (defun ledna/get-title (&optional target default)
   (ledna/get-property "ITEM" target default))
@@ -292,8 +304,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (let ((i (string-to-number (ledna/get-property property))))
     (ledna/set-property property (% (+ i (or inc 1)) limit))))
 
-(defun ledna/inc-property (property &optional val units target)
-  (loop for mark in (or target (ledna/$self))
+(defun ledna/inc-property (property &optional val units marker)
+  (loop for mark in (ledna/markers marker)
         with result-value
         do (let* ((full-prop-value (ledna/get-property property mark "0"))
                   (inc-value (cond ((and (stringp val) (string-is-numeric-p val)) (string-to-number val))
@@ -302,7 +314,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                   (prop-number (string-to-number (car (split-string full-prop-value))))
                   (prop-label (or units (key-description (cdr (split-string full-prop-value))))))
              (setq result-value (s-trim (concat (number-to-string (+ inc-value prop-number)) " " prop-label)))
-             (ledna/set-property property result-value (list mark)))
+             (ledna/set-property property result-value mark))
         collect result-value))
 
 (defun ledna/inc-property-get (property &rest args)
@@ -316,18 +328,15 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         (org-entry-properties nil 'standard)))
 
 (defun ledna/get-todo-state (&optional marker)
-  (let ((mark (car (or marker (ledna/$self)))))
-    (save-excursion
-      (with-current-buffer (marker-buffer mark)
-        (goto-char mark)
-        (substring-no-properties (org-get-todo-state))))))
+  (ledna/oom
+   (mapcar 'substring-no-properties
+           (remove nil (ledna/map 'org-get-todo-state marker)))))
 
 (defun ledna/set-todo-state (state &optional marker)
-  (let ((mark (car (or marker (ledna/$self)))))
-    (save-mark-and-excursion
-      (with-current-buffer (marker-buffer mark)
-        (goto-char mark)
-        (org-todo state)))))
+  (ledna/map #'(lambda () (org-todo state)) marker))
+
+(defun ledna/$children (&optional marker)
+  (-flatten (ledna/map 'org-edna-finder/children marker)))
 
 (defun ledna/$parent ()
   (org-edna-finder/parent))
