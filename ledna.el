@@ -186,73 +186,15 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
 
-;; priority list of magic tags
-;; greater priorities mean latter execution
-(setq ledna/magic-tags
-      '(;; Tag                Status       Handler                               Priority
-
-        (  Pending_Inherit   ((*->PENDING (ledna/set-todo-state "PENDING" (ledna/$parent)))
-                              (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
-
-        ;; Constructors
-        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))                  1)
-        (  Rename            ((->TODO     (ledna-entry-name-from-template)))           1)
-
-        ;; Destructors
-        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))                    1)
-        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime)))       1)
-
-        ;; User-defined properties are executed with priority = 100
-        ;; So do not confuse yourself:
-        ;; use tags that change properties after user-defined triggers.
-        (  Counter           ((*->DONE      (ledna/inc-property "$COUNT")))            110)
-
-        (  Clone             ((*->DONE      (ledna-clone))
-                              (*->CANCELLED (ledna-clone)))                            120)
-        (  Cleanup           ((*->DONE      (delete-entry-properties))
-                              (*->CANCELLED (delete-entry-properties)))                1000)
-
-        ;; Warning!
-        ;; Archive feature does not work properly with LOGBOOK changing cases:
-        ;; LOGBOOK appends to next or cloned entry
-        (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
-                              (*->CANCELLED (ledna/defer 'org-archive-subtree)))       1001)
-        (  Archive_Maybe     ((*->DONE      (ledna/defer 'try-to-archive-me))
-                              (*->CANCELLED (ledna/defer 'try-to-archive-me)))         1001)))
-
-(setq ledna/complex-tags
-      '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule
-                              Clone Cleanup Effort_Clock Counter
-                              Rename Hometask_Deadline Archive_Maybe))))
-
-(defun ledna/tags-prioritized (tags)
-  (loop for (name (status header) priority)
-        in (ledna/magic-tags-sorted)
-        when (member name tags)
-        collect (list name priority)))
-
-(defun ledna/magic-tag-get-priority (tag)
-  (cadr (alist-get 'Cleanup ledna/magic-tags)))
-
-(defun ledna/magic-tags-sorted ()
-  (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
-
-(defun ledna/magic-tags-list ()
-  (mapcar #'car (ledna/magic-tags-sorted)))
-
-(defun ledna/complex-tags-list ()
-  (mapcar #'car ledna/complex-tags))
-
 (defun ledna-entry-name-from-template ()
-  (when-let ((template (or (ledna/get-property "$TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
+  (when-let ((template (or (ledna/get-property "__TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
     (org-back-to-heading)
     (org-beginning-of-line)
     (org-kill-line)
 
     (let ((entry-name-format template)
-          (entry-name-fmt-args  (list (cons "ledna-times" (num-with-ordinal-indicator (string-to-number (or (ledna/get-property "$COUNT") "1"))))
-                                      (cons "$COUNT" (string-to-number (or (ledna/get-property "$COUNT") "1"))))))
+          (entry-name-fmt-args  (list (cons "ledna-times" (num-with-ordinal-indicator (string-to-number (or (ledna/get-property ledna-props-count) "1"))))
+                                      (cons ledna-props-count (string-to-number (or (ledna/get-property ledna-props-count) "1"))))))
       (insert (s-format entry-name-format 'aget entry-name-fmt-args)))))
 
 (require 's)
@@ -323,7 +265,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun delete-entry-properties (&optional pom)
   (mapc #'(lambda (p) (let ((pname (car p)))
-                        (when (not (string= pname "$ARCHIVE"))
+                        (when (not (string= pname ledna-props-archive))
                           (org-delete-property pname))))
         (org-entry-properties nil 'standard)))
 
@@ -408,7 +350,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
             (org-clock-update-time-maybe))))))
 
 (defun ledna-advanced-schedule (&optional target)
-  (when-let (schedule-prop (ledna/get-property "$SCHEDULE"))
+  (when-let (schedule-prop (ledna/get-property ledna-props-schedule))
     (let* ((schedule (cadr (read schedule-prop)))
            (next-time (get-nearest-date schedule)))
       (set-scheduled next-time target)
@@ -469,15 +411,78 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
+(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry after finish if true" ":__ARCHIVE: t") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"")))))
+(loop for (symbol name type descr example) in ledna-reserved-properties
+      do (eval (macroexpand (list 'defconst (intern symbol) name
+                                  (format "%s. Type = %s." descr type)))))
+)
+
+;; priority list of magic tags
+;; greater priorities mean latter execution
+(setq ledna/magic-tags
+      '(;; Tag                Status       Handler                               Priority
+
+        (  Pending_Inherit   ((*->PENDING (ledna/set-todo-state "PENDING" (ledna/$parent)))
+                              (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
+
+        ;; Constructors
+        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))                        1)
+        (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
+
+        ;; Destructors
+        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))                          1)
+        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime)))             1)
+
+        ;; User-defined properties are executed with priority = 100
+
+        ;; So do not confuse yourself:
+        ;; use tags that change properties after user-defined triggers.
+        (  Counter           ((*->DONE      (ledna/inc-property ledna-props-count)))         110)
+
+        (  Clone             ((*->DONE      (ledna-clone))
+                              (*->CANCELLED (ledna-clone)))                                  120)
+        (  Cleanup           ((*->DONE      (delete-entry-properties))
+                              (*->CANCELLED (delete-entry-properties)))                      1000)
+
+        ;; Deferred destructors
+        (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
+                              (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)
+        (  Archive_Maybe     ((*->DONE      (ledna/defer 'try-to-archive-me))
+                              (*->CANCELLED (ledna/defer 'try-to-archive-me)))               1001)))
+
+(setq ledna/complex-tags
+      '(;; Complex tag       Features
+        (  Repeated_Task     (Advanced_Schedule
+                              Clone Cleanup Effort_Clock Counter
+                              Rename Hometask_Deadline Archive_Maybe))))
+
+(defun ledna/tags-prioritized (tags)
+  (loop for (name (status header) priority)
+        in (ledna/magic-tags-sorted)
+        when (member name tags)
+        collect (list name priority)))
+
+(defun ledna/magic-tag-get-priority (tag)
+  (cadr (alist-get 'Cleanup ledna/magic-tags)))
+
+(defun ledna/magic-tags-sorted ()
+  (sort ledna/magic-tags #'(lambda (a b) (< (caddr a) (caddr b)))))
+
+(defun ledna/magic-tags-list ()
+  (mapcar #'car (ledna/magic-tags-sorted)))
+
+(defun ledna/complex-tags-list ()
+  (mapcar #'car ledna/complex-tags))
+
 (defun try-to-archive-me ()
-  (when (string= (ledna/get-property "$ARCHIVE") "t")
-    (org-delete-property "$ARCHIVE")
+  (when (string= (ledna/get-property ledna-props-archive) "t")
+    (org-delete-property ledna-props-archive)
     (org-archive-subtree)))
 
 (defun set-hometask-deadline ()
-  (when (ledna/get-property "$HOMETASK")
-    (when-let (hometask-entries (select (tags (ledna/get-property "$HOMETASK"))))
-    (when-let (schedule-prop (ledna/get-property "$SCHEDULE"))
+  (when (ledna/get-property ledna-props-hometask)
+    (when-let (hometask-entries (select (tags (ledna/get-property ledna-props-hometask))))
+    (when-let (schedule-prop (ledna/get-property ledna-props-schedule))
       (let* ((schedule (cadr (read schedule-prop)))
              (next-time (get-nearest-date schedule)))
         (set-deadline next-time hometask-entries))))))
