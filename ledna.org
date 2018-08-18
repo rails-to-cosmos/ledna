@@ -508,6 +508,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 | ledna-props-schedule | __SCHEDULE | list<string> | Describe repeated scheduling       | :__SCHEDULE: '("Mon 15:00" "Wed 17:00" "Fri 18:00") |
 | ledna-props-archive  | __ARCHIVE? | bool         | Archive entry after finish if true | :__ARCHIVE: t                                       |
 | ledna-props-hometask | $HOMETASK  | string       | Hometask selector                  | :$HOMETASK: Homework+CATEGORY="English"             |
+| ledna-props-template | __TEMPLATE | string       | Header prototype template          | :__TEMPLATE: ${ledna-times} English class           |
 
 #+NAME: ob-ledna-define-constants
 #+BEGIN_SRC emacs-lisp :var ledna-reserved-properties=tbl-ledna-reserved-properties :results org
