@@ -187,7 +187,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (numberp (car (read-from-string string))))
 
 (defun ledna-entry-name-from-template ()
-  (when-let ((template (or (ledna/get-property "__TEMPLATE") (cdr (assoc-string "ITEM" (org-entry-properties))))))
+  (when-let ((template (or (ledna/get-property ledna-props-template) (cdr (assoc-string "ITEM" (org-entry-properties))))))
     (org-back-to-heading)
     (org-beginning-of-line)
     (org-kill-line)
