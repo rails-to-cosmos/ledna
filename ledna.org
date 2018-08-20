@@ -622,6 +622,11 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 #+BEGIN_SRC emacs-lisp
 (provide 'ledna)
 #+END_SRC
+* Todos [0/1]
+** TODO Feature request: SCHEDULE each 2 days/weeks/months
+#+BEGIN_QUOTE
+__SCHEDULE: '("Mon 16:30 each 2 weeks")
+#+END_QUOTE
 * Settings
 # Local Variables:
 # firestarter: (org-babel-tangle)
