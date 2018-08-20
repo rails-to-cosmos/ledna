@@ -476,7 +476,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun try-to-archive-me ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
-    (org-delete-property ledna-props-archive)
     (org-archive-subtree)))
 
 (defun set-hometask-deadline ()

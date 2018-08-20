@@ -579,7 +579,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 #+BEGIN_SRC emacs-lisp
 (defun try-to-archive-me ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
-    (org-delete-property ledna-props-archive)
     (org-archive-subtree)))
 #+END_SRC
 ** Hometasks
