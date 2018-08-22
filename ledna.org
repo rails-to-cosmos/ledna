@@ -506,8 +506,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 |----------------------+------------+--------------+------------------------------------+-----------------------------------------------------|
 | ledna-props-count    | _COUNT     | int          | Default counter property           | :_COUNT: 1                                          |
 | ledna-props-schedule | __SCHEDULE | list<string> | Describe repeated scheduling       | :__SCHEDULE: '("Mon 15:00" "Wed 17:00" "Fri 18:00") |
-| ledna-props-archive  | __ARCHIVE? | bool         | Archive entry after finish if true | :__ARCHIVE: t                                       |
 | ledna-props-template | __TEMPLATE | string       | Header prototype template          | :__TEMPLATE: ${ledna-times} English class           |
+| ledna-props-archive  | __ARCHIVE? | bool         | Archive entry after finish if true | :__ARCHIVE: t                                       |
 | ledna-props-hometask | $HOMETASK  | string       | Hometask selector                  | :$HOMETASK: Homework+CATEGORY="English"             |
 
 #+NAME: ob-ledna-define-constants
@@ -579,7 +579,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 #+BEGIN_SRC emacs-lisp
 (defun try-to-archive-me ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
-    (org-delete-property ledna-props-archive)
     (org-archive-subtree)))
 #+END_SRC
 ** Hometasks
@@ -623,6 +622,11 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 #+BEGIN_SRC emacs-lisp
 (provide 'ledna)
 #+END_SRC
+* Todos [0/1]
+** TODO Feature request: SCHEDULE each 2 days/weeks/months
+#+BEGIN_QUOTE
+__SCHEDULE: '("Mon 16:30 each 2 weeks")
+#+END_QUOTE
 * Settings
 # Local Variables:
 # firestarter: (org-babel-tangle)

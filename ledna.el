@@ -411,7 +411,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
-(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry after finish if true" ":__ARCHIVE: t") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"")))))
+(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry after finish if true" ":__ARCHIVE: t") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"")))))
 (loop for (symbol name type descr example) in ledna-reserved-properties
       do (eval (macroexpand (list 'defconst (intern symbol) name
                                   (format "%s. Type = %s." descr type)))))
@@ -476,7 +476,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun try-to-archive-me ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
-    (org-delete-property ledna-props-archive)
     (org-archive-subtree)))
 
 (defun set-hometask-deadline ()
