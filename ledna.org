@@ -502,7 +502,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 * Defaults
 ** Properties
 #+TBLNAME: tbl-ledna-reserved-properties
-| Symbol               | Value      | Type         | Description                        | Example                                             |
+| Symbol               | Property   | Type         | Description                        | Example                                             |
 |----------------------+------------+--------------+------------------------------------+-----------------------------------------------------|
 | ledna-props-count    | _COUNT     | int          | Default counter property           | :_COUNT: 1                                          |
 | ledna-props-schedule | __SCHEDULE | list<string> | Describe repeated scheduling       | :__SCHEDULE: '("Mon 15:00" "Wed 17:00" "Fri 18:00") |
