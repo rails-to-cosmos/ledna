@@ -622,7 +622,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 #+BEGIN_SRC emacs-lisp
 (provide 'ledna)
 #+END_SRC
-* Todos [0/1]
+* Todos [0/2]
+** TODO Support [[http://www.nongnu.org/org-edna-el/][edna]] set-property (’inc, ’dec, ’previous, and ’next as values)
 ** TODO Feature request: SCHEDULE each 2 days/weeks/months
 #+BEGIN_QUOTE
 __SCHEDULE: '("Mon 16:30 each 2 weeks")
