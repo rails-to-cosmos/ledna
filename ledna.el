@@ -265,8 +265,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun delete-entry-properties (&optional pom)
   (mapc #'(lambda (p) (let ((pname (car p)))
-                        (when (not (string= pname ledna-props-archive))
-                          (org-delete-property pname))))
+                        (org-delete-property pname)))
         (org-entry-properties nil 'standard)))
 
 (defun ledna/get-todo-state (&optional marker)
@@ -430,8 +429,10 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
 
         ;; Destructors
-        (  Hometask_Deadline ((*->DONE    (set-hometask-deadline)))                          1)
-        (  Effort_Clock      ((TODO->DONE (ledna/consider-effort-as-clocktime)))             1)
+        (  Hometask_Deadline ((*->DONE      (set-hometask-deadline)))                        1)
+        (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
+        (  Archive_Maybe     ((*->DONE      (ledna/archive-subtree-maybe-defer))
+                              (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
 
         ;; User-defined properties are executed with priority = 100
 
@@ -441,14 +442,15 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
         (  Clone             ((*->DONE      (ledna-clone))
                               (*->CANCELLED (ledna-clone)))                                  120)
+
+        ;; Removing entry properties
+        ;; Warning! Tags with priority > 1000 won't have access to special properties
         (  Cleanup           ((*->DONE      (delete-entry-properties))
                               (*->CANCELLED (delete-entry-properties)))                      1000)
 
         ;; Deferred destructors
         (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
-                              (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)
-        (  Archive_Maybe     ((*->DONE      (ledna/defer 'try-to-archive-me))
-                              (*->CANCELLED (ledna/defer 'try-to-archive-me)))               1001)))
+                              (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag       Features
@@ -474,9 +476,9 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 (defun ledna/complex-tags-list ()
   (mapcar #'car ledna/complex-tags))
 
-(defun try-to-archive-me ()
+(defun ledna/archive-subtree-maybe-defer ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
-    (org-archive-subtree)))
+    (ledna/defer #'org-archive-subtree)))
 
 (defun set-hometask-deadline ()
   (when (ledna/get-property ledna-props-hometask)
