@@ -186,6 +186,9 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   ;; number, which is ambiguous.
   (numberp (car (read-from-string string))))
 
+(defun ledna/org-kill-subtree ()
+  (kill-region (org-entry-beginning-position) (org-entry-end-position)))
+
 (defun ledna-entry-name-from-template ()
   (when-let ((template (or (ledna/get-property ledna-props-template) (cdr (assoc-string "ITEM" (org-entry-properties))))))
     (org-back-to-heading)
@@ -410,7 +413,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
-(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry after finish if true" ":__ARCHIVE: t") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"")))))
+(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry if t" ":__ARCHIVE?: t") ("ledna-props-kill" "__KILL?" "bool" "Kill entry if t" ":__KILL?: t")))))
 (loop for (symbol name type descr example) in ledna-reserved-properties
       do (eval (macroexpand (list 'defconst (intern symbol) name
                                   (format "%s. Type = %s." descr type)))))
@@ -431,6 +434,10 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         ;; Destructors
         (  Hometask_Deadline ((*->DONE      (set-hometask-deadline)))                        1)
         (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
+
+        ;; Uncertain destructors
+        (  Kill_Maybe        ((*->DONE      (ledna/kill-subtree-maybe-defer))
+                              (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
         (  Archive_Maybe     ((*->DONE      (ledna/archive-subtree-maybe-defer))
                               (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
 
@@ -449,6 +456,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                               (*->CANCELLED (delete-entry-properties)))                      1000)
 
         ;; Deferred destructors
+        (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree)            1001)
+                              (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)            1001)))
         (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
                               (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
@@ -456,7 +465,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
       '(;; Complex tag       Features
         (  Repeated_Task     (Advanced_Schedule
                               Clone Cleanup Effort_Clock Counter
-                              Rename Hometask_Deadline Archive_Maybe))))
+                              Rename Hometask_Deadline Archive_Maybe Kill_Maybe))))
 
 (defun ledna/tags-prioritized (tags)
   (loop for (name (status header) priority)
@@ -475,6 +484,10 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun ledna/complex-tags-list ()
   (mapcar #'car ledna/complex-tags))
+
+(defun ledna/kill-subtree-maybe-defer ()
+  (when (string= (ledna/get-property ledna-props-kill) "t")
+    (ledna/defer #'ledna/org-kill-subtree)))
 
 (defun ledna/archive-subtree-maybe-defer ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
