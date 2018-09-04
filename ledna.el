@@ -456,8 +456,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                               (*->CANCELLED (delete-entry-properties)))                      1000)
 
         ;; Deferred destructors
-        (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree)            1001)
-                              (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)            1001)))
+        (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree))
+                              (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)))          1001)
         (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
                               (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
@@ -465,7 +465,9 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
       '(;; Complex tag       Features
         (  Repeated_Task     (Advanced_Schedule
                               Clone Cleanup Effort_Clock Counter
-                              Rename Hometask_Deadline Archive_Maybe Kill_Maybe))))
+                              Rename Hometask_Deadline Archive_Maybe Kill_Maybe))
+
+        (  Reminder          (Advanced_Schedule Clone Kill))))
 
 (defun ledna/tags-prioritized (tags)
   (loop for (name (status header) priority)
