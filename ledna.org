@@ -244,7 +244,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (numberp (car (read-from-string string))))
 #+END_SRC
 ** Entries manipulation
-*** Kill Subtree
+*** Remove
 #+BEGIN_SRC emacs-lisp
 (defun ledna/org-kill-subtree ()
   (kill-region (org-entry-beginning-position) (org-entry-end-position)))
@@ -540,10 +540,11 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
 
         ;; Uncertain destructors
-        (  Kill_Maybe        ((*->DONE      (ledna/kill-subtree-maybe-defer))
-                              (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
-        (  Archive_Maybe     ((*->DONE      (ledna/archive-subtree-maybe-defer))
-                              (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
+        (  Kill_Maybe         ((*->DONE      (ledna/kill-subtree-maybe-defer))
+                               (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
+        (  Forget_Unnecessary ((*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
+        (  Archive_Maybe      ((*->DONE      (ledna/archive-subtree-maybe-defer))
+                               (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
 
         ;; User-defined properties are executed with priority = 100
 
@@ -562,16 +563,19 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         ;; Deferred destructors
         (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree))
                               (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)))          1001)
+
+
+
         (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
                               (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
 (setq ledna/complex-tags
-      '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule
-                              Clone Cleanup Effort_Clock Counter
-                              Rename Hometask_Deadline Archive_Maybe Kill_Maybe))
-
-        (  Reminder          (Advanced_Schedule Clone Kill))))
+      '(;; Complex tag         Features
+        (  Repeated_Task     ( Advanced_Schedule
+                               Clone Cleanup Effort_Clock Counter
+                               Rename Hometask_Deadline Archive_Maybe
+                               Forget_Unnecessary))
+        (  Reminder          ( Advanced_Schedule Clone Kill))))
 
 (defun ledna/tags-prioritized (tags)
   (loop for (name (status header) priority)
@@ -591,13 +595,14 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 (defun ledna/complex-tags-list ()
   (mapcar #'car ledna/complex-tags))
 #+END_SRC
-** Kill Destructor
+** Destructors
+*** Kill
 #+BEGIN_SRC emacs-lisp
 (defun ledna/kill-subtree-maybe-defer ()
   (when (string= (ledna/get-property ledna-props-kill) "t")
     (ledna/defer #'ledna/org-kill-subtree)))
 #+END_SRC
-** Archive Destructor
+*** Archive
 #+BEGIN_SRC emacs-lisp
 (defun ledna/archive-subtree-maybe-defer ()
   (when (string= (ledna/get-property ledna-props-archive) "t")

@@ -436,10 +436,11 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
 
         ;; Uncertain destructors
-        (  Kill_Maybe        ((*->DONE      (ledna/kill-subtree-maybe-defer))
-                              (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
-        (  Archive_Maybe     ((*->DONE      (ledna/archive-subtree-maybe-defer))
-                              (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
+        (  Kill_Maybe         ((*->DONE      (ledna/kill-subtree-maybe-defer))
+                               (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
+        (  Forget_Unnecessary ((*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
+        (  Archive_Maybe      ((*->DONE      (ledna/archive-subtree-maybe-defer))
+                               (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
 
         ;; User-defined properties are executed with priority = 100
 
@@ -458,16 +459,19 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         ;; Deferred destructors
         (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree))
                               (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)))          1001)
+
+
+
         (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
                               (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
 (setq ledna/complex-tags
-      '(;; Complex tag       Features
-        (  Repeated_Task     (Advanced_Schedule
-                              Clone Cleanup Effort_Clock Counter
-                              Rename Hometask_Deadline Archive_Maybe Kill_Maybe))
-
-        (  Reminder          (Advanced_Schedule Clone Kill))))
+      '(;; Complex tag         Features
+        (  Repeated_Task     ( Advanced_Schedule
+                               Clone Cleanup Effort_Clock Counter
+                               Rename Hometask_Deadline Archive_Maybe
+                               Forget_Unnecessary))
+        (  Reminder          ( Advanced_Schedule Clone Kill))))
 
 (defun ledna/tags-prioritized (tags)
   (loop for (name (status header) priority)
