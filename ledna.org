@@ -293,6 +293,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
     (org-update-checkbox-count)))
 #+END_SRC
 *** Properties
+**** setters
 #+BEGIN_SRC emacs-lisp
 (defun ledna/set-property (property value &optional marker)
   (flet ((set-current-prop () (org-entry-put marker property
@@ -300,7 +301,9 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                                                    ((stringp value) value)
                                                    (t "Unknown value type")))))
     (ledna/map #'set-current-prop marker)))
-
+#+END_SRC
+**** getters
+#+BEGIN_SRC emacs-lisp
 (defun ledna/get-property (property &optional marker default)
   (ledna/oom (loop for mark in (ledna/markers marker)
                    for val = (or (org-entry-get mark property) default)
@@ -309,11 +312,24 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun ledna/get-title (&optional target default)
   (ledna/get-property "ITEM" target default))
-
+#+END_SRC
+**** next-allowed-value
+#+BEGIN_SRC emacs-lisp
+(defun ledna/next-allowed-value (property)
+  (let* ((prop-value (ledna/get-property property)))
+    (save-excursion
+      ;; Jump to the property line, (required for `org-property-next-allowed-value')
+      (re-search-forward (org-re-property property nil nil prop-value))
+      (org-property-next-allowed-value prop-value))))
+#+END_SRC
+**** circ
+#+BEGIN_SRC emacs-lisp
 (defun ledna/circ-property (property limit &optional inc)
   (let ((i (string-to-number (ledna/get-property property))))
     (ledna/set-property property (% (+ i (or inc 1)) limit))))
-
+#+END_SRC
+**** inc
+#+BEGIN_SRC emacs-lisp
 (defun ledna/inc-property (property &optional val units marker)
   (loop for mark in (ledna/markers marker)
         with result-value
@@ -330,7 +346,9 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (defun ledna/inc-property-get (property &rest args)
   (apply #'ledna/inc-property (append (list property) args))
   (ledna/get-property property))
-
+#+END_SRC
+**** delete
+#+BEGIN_SRC emacs-lisp
 (defun delete-entry-properties (&optional pom)
   (mapc #'(lambda (p) (let ((pname (car p)))
                         (org-delete-property pname)))
