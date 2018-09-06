@@ -466,8 +466,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree))
                               (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)))          1001)
 
-
-
         (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
                               (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
