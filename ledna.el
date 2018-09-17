@@ -176,7 +176,10 @@ ORIG-FUN is a blocker function called with ARGS."
     (loop for mark in (ledna/markers marker)
             collect (progn
                       (org-goto-marker-or-bmk mark)
-                      (funcall handler)))))
+                      (funcall handler))
+            finally (progn
+                      (org-align-all-tags)
+                      (org-update-checkbox-count)))))
 
 (defun string-is-numeric-p (string)
   "Return non-nil if STRING is a valid numeric string.
@@ -188,6 +191,13 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun ledna/org-kill-subtree ()
   (kill-region (org-entry-beginning-position) (org-entry-end-position)))
+
+(defun ledna/rename (title &optional marker)
+  (flet ((rename ()
+                 (search-forward " ")
+                 (org-kill-line)
+                 (insert title)))
+    (ledna/map #'rename marker)))
 
 (defun ledna-entry-name-from-template ()
   (when-let ((template (or (ledna/get-property ledna-props-template) (cdr (assoc-string "ITEM" (org-entry-properties))))))
@@ -357,7 +367,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                                    'with-hm 'inactive)
             (org-clock-update-time-maybe))))))
 
-(defun ledna-advanced-schedule (&optional target)
+(defun ledna/advanced-schedule (&optional target)
   (when-let (schedule-prop (ledna/get-property ledna-props-schedule))
     (let* ((schedule (cadr (read schedule-prop)))
            (next-time (get-nearest-date schedule)))
@@ -434,7 +444,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                               (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
-        (  Advanced_Schedule ((->TODO     (ledna-advanced-schedule)))                        1)
+        (  Advanced_Schedule ((->TODO     (ledna/advanced-schedule)))                        1)
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
 
         ;; Destructors
