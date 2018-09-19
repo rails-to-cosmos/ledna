@@ -172,7 +172,7 @@ ORIG-FUN is a blocker function called with ARGS."
                   handler (ledna/mos marker)))
 
 (defun ledna/map (handler &optional marker)
-  (save-excursion
+  (save-window-excursion
     (loop for mark in (ledna/markers marker)
             collect (progn
                       (org-goto-marker-or-bmk mark)
@@ -212,7 +212,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (require 's)
 
 (defun ledna-clone (&rest args)
-  (save-excursion
+  (save-window-excursion
     (org-back-to-heading)
 
     (let* ((src-entry             (or (plist-get args :source)       (ledna/$self)))
@@ -256,7 +256,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun ledna/next-allowed-value (property)
   (let* ((prop-value (ledna/get-property property)))
-    (save-excursion
+    (save-window-excursion
       ;; Jump to the property line, (required for `org-property-next-allowed-value')
       (re-search-forward (org-re-property property nil nil prop-value))
       (org-property-next-allowed-value prop-value))))
@@ -302,7 +302,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (org-edna-finder/parent))
 
 (defun ledna/$self ()
-  (save-excursion
+  (save-window-excursion
     (org-back-to-heading)
     (list (point-marker))))
 
@@ -348,7 +348,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun ledna/consider-effort-as-clocktime ()
   (if-let (entry-effort (ledna/get-property "EFFORT"))
-      (save-excursion
+      (save-window-excursion
         (save-restriction
           (org-clock-find-position org-clock-in-resume)
           (insert-before-markers "\n")
