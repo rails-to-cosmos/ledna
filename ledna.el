@@ -173,13 +173,14 @@ ORIG-FUN is a blocker function called with ARGS."
 
 (defun ledna/map (handler &optional marker)
   (save-window-excursion
-    (loop for mark in (ledna/markers marker)
+    (save-excursion
+      (loop for mark in (ledna/markers marker)
             collect (progn
                       (org-goto-marker-or-bmk mark)
                       (funcall handler))
             finally (progn
                       (org-align-all-tags)
-                      (org-update-checkbox-count)))))
+                      (org-update-checkbox-count))))))
 
 (defun string-is-numeric-p (string)
   "Return non-nil if STRING is a valid numeric string.
@@ -213,30 +214,31 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun ledna-clone (&rest args)
   (save-window-excursion
-    (org-back-to-heading)
+    (save-excursion
+      (org-back-to-heading)
 
-    (let* ((src-entry             (or (plist-get args :source)       (ledna/$self)))
-           (src-props             (org-entry-properties))
-           (src-props-std         (org-entry-properties nil 'standard))
-           (src-props-std-keys    (mapcar #'car src-props-std))
-           (src-tags-string       (org-get-tags-string))
-           (todo-state            (or (plist-get args :todo-state)   "TODO"))
-           (target-props          (or (plist-get args :properties)   src-props-std-keys)))
+      (let* ((src-entry             (or (plist-get args :source)       (ledna/$self)))
+             (src-props             (org-entry-properties))
+             (src-props-std         (org-entry-properties nil 'standard))
+             (src-props-std-keys    (mapcar #'car src-props-std))
+             (src-tags-string       (org-get-tags-string))
+             (todo-state            (or (plist-get args :todo-state)   "TODO"))
+             (target-props          (or (plist-get args :properties)   src-props-std-keys)))
 
-      (org-insert-heading-respect-content)
-      (insert (cdr (assoc-string "ITEM" src-props)) " " src-tags-string)
+        (org-insert-heading-respect-content)
+        (insert (cdr (assoc-string "ITEM" src-props)) " " src-tags-string)
 
-      ;; Copy properties
-      (mapc #'(lambda (prop)
-                (when-let (p (assoc-string prop src-props))
+        ;; Copy properties
+        (mapc #'(lambda (prop)
+                  (when-let (p (assoc-string prop src-props))
                     (condition-case nil
                         (ledna/set-property (car p) (cdr p))
                       (error nil))))
-            target-props)
+              target-props)
 
-      (ledna/set-todo-state todo-state))
-    (org-align-all-tags)
-    (org-update-checkbox-count)))
+        (ledna/set-todo-state todo-state))
+      (org-align-all-tags)
+      (org-update-checkbox-count))))
 
 (defun ledna/set-property (property value &optional marker)
   (flet ((set-current-prop () (org-entry-put marker property
@@ -257,9 +259,10 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 (defun ledna/next-allowed-value (property)
   (let* ((prop-value (ledna/get-property property)))
     (save-window-excursion
-      ;; Jump to the property line, (required for `org-property-next-allowed-value')
-      (re-search-forward (org-re-property property nil nil prop-value))
-      (org-property-next-allowed-value prop-value))))
+      (save-excursion
+        ;; Jump to the property line, (required for `org-property-next-allowed-value')
+        (re-search-forward (org-re-property property nil nil prop-value))
+        (org-property-next-allowed-value prop-value)))))
 
 (defun ledna/circ-property (property limit &optional inc)
   (let ((i (string-to-number (ledna/get-property property))))
@@ -282,11 +285,6 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (apply #'ledna/inc-property (append (list property) args))
   (ledna/get-property property))
 
-(defun delete-entry-properties (&optional pom)
-  (mapc #'(lambda (p) (let ((pname (car p)))
-                        (org-delete-property pname)))
-        (org-entry-properties nil 'standard)))
-
 (defun ledna/get-todo-state (&optional marker)
   (ledna/oom
    (mapcar 'substring-no-properties
@@ -303,8 +301,9 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun ledna/$self ()
   (save-window-excursion
-    (org-back-to-heading)
-    (list (point-marker))))
+    (save-excursion
+      (org-back-to-heading)
+      (list (point-marker)))))
 
 (defun ids (&rest ids)
   "Find a list of headings with given IDS.
@@ -349,7 +348,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 (defun ledna/consider-effort-as-clocktime ()
   (if-let (entry-effort (ledna/get-property "EFFORT"))
       (save-window-excursion
-        (save-restriction
+        (save-excursion
+          (save-restriction
           (org-clock-find-position org-clock-in-resume)
           (insert-before-markers "\n")
           (backward-char 1)
@@ -365,7 +365,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
             (org-insert-time-stamp (seconds-to-time (+ (time-to-seconds scheduled-time)
                                                        (* (org-duration-to-minutes entry-effort) 60)))
                                    'with-hm 'inactive)
-            (org-clock-update-time-maybe))))))
+            (org-clock-update-time-maybe)))))))
 
 (defun ledna/advanced-schedule (&optional target)
   (when-let (schedule-prop (ledna/get-property ledna-props-schedule))
@@ -429,7 +429,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
-(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry if t" ":__ARCHIVE?: t") ("ledna-props-kill" "__KILL?" "bool" "Kill entry if t" ":__KILL?: t")))))
+(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry if t" ":__ARCHIVE?: t") ("ledna-props-kill" "__KILL?" "bool" "Kill entry if t" ":__KILL?: t") ("ledna-props-cleanup" "__CLEANUP?" "bool or list<string>" "Delete entry props if t or props specified" ":__CLEANUP?: '(\"_PRICE\" \"_PASSED\" \"_COUNT\")")))))
 (loop for (symbol name type descr example) in ledna-reserved-properties
       do (eval (macroexpand (list 'defconst (intern symbol) name
                                   (format "%s. Type = %s." descr type)))))
@@ -452,6 +452,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
 
         ;; Uncertain destructors
+        (  Cleanup_Maybe      ((*->DONE      (ledna/cleanup-maybe-defer))
+                               (*->CANCELLED (ledna/cleanup-maybe-defer)))                    1)
         (  Kill_Maybe         ((*->DONE      (ledna/kill-subtree-maybe-defer))
                                (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
         (  Forget_Unnecessary ((*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
@@ -469,8 +471,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
         ;; Removing entry properties
         ;; Warning! Tags with priority > 1000 won't have access to special properties
-        (  Cleanup           ((*->DONE      (delete-entry-properties))
-                              (*->CANCELLED (delete-entry-properties)))                      1000)
+        (  Cleanup           ((*->DONE      (ledna/cleanup-properties))
+                              (*->CANCELLED (ledna/cleanup-properties)))                     1000)
 
         ;; Deferred destructors
         (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree))
@@ -504,6 +506,18 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun ledna/complex-tags-list ()
   (mapcar #'car ledna/complex-tags))
+
+(defun ledna/cleanup-properties (&optional pom)
+  (if-let ((cleanup-prop (ledna/get-property ledna-props-cleanup)))
+      (if (listp cleanup-prop)
+          (mapc #'(lambda (p) (org-delete-property p))
+                cleanup-prop)
+        (mapc #'(lambda (p) (let ((pname (car p))) (org-delete-property pname)))
+              (org-entry-properties nil 'standard)))
+    (message "Cleanup request rejected (__CLEANUP? property is nil)")))
+
+(defun ledna/cleanup-maybe-defer ()
+  (ledna/defer #'ledna/cleanup-properties))
 
 (defun ledna/kill-subtree-maybe-defer ()
   (when (string= (ledna/get-property ledna-props-kill) "t")
