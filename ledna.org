@@ -639,8 +639,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
           (mapc #'(lambda (p) (org-delete-property p))
                 cleanup-prop)
         (mapc #'(lambda (p) (let ((pname (car p))) (org-delete-property pname)))
-              (org-entry-properties nil 'standard)))
-    (message "Cleanup request rejected (__CLEANUP? property is nil)")))
+              (org-entry-properties nil 'standard)))))
 
 (defun ledna/cleanup-maybe-defer ()
   (ledna/defer #'ledna/cleanup-properties))
