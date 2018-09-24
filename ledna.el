@@ -254,7 +254,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
                    collect property-value)))
 
 (defun ledna/get-property-read (property &optional marker default)
-  (read (ledna/get-property property marker default)))
+  (if-let ((pval (ledna/get-property property marker default)))
+      (eval (read pval))))
 
 (defun ledna/get-title (&optional target default)
   (ledna/get-property "ITEM" target default))
@@ -386,7 +387,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 				      (current-time)))))
 
 (defun ledna/get-nearest-date (times)
-  (let* ((current-sec (time-to-seconds (org-current-time))))
+  (let ((current-sec (time-to-seconds (org-current-time))))
     (cl-flet* ((diff (time)
       (let* ((target-sec (org-time-string-to-seconds (active-timestamp time)))
              (diff-sec (- target-sec current-sec)))
@@ -394,9 +395,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
               ((< diff-sec 0) (+ diff-sec 604800))
               ((> diff-sec 604800) (- diff-sec 604800)))))
                (comparator (a b) (< (diff a) (diff b))))
-    (let ((times* (sort times #'comparator)))
-      (cond ((arrayp times*) (elt times* 0))
-            ((listp times*) (car times*)))))))
+      (let ((times* (sort times #'comparator)))
+        (elt times* 0)))))
 
 (defun active-timestamp (str)
   (let* ((default-time (org-current-time))
