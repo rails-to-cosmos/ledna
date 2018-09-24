@@ -194,7 +194,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
   (kill-region (org-entry-beginning-position) (org-entry-end-position)))
 
 (defun ledna/rename (title &optional marker)
-  (flet ((rename ()
+  (cl-flet ((rename ()
                  (search-forward " ")
                  (org-kill-line)
                  (insert title)))
@@ -241,7 +241,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
       (org-update-checkbox-count))))
 
 (defun ledna/set-property (property value &optional marker)
-  (flet ((set-current-prop () (org-entry-put marker property
+  (cl-flet ((set-current-prop () (org-entry-put marker property
                                              (cond ((numberp value) (number-to-string value))
                                                    ((stringp value) value)
                                                    (t "Unknown value type")))))
@@ -249,24 +249,33 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
 
 (defun ledna/get-property (property &optional marker default)
   (ledna/oom (loop for mark in (ledna/markers marker)
-                   for val = (or (org-entry-get mark property) default)
-                   when (not (eq val nil))
-                   collect val)))
+                   for property-value = (or (org-entry-get mark property) default)
+                   when (not (eq property-value nil))
+                   collect property-value)))
+
+(defun ledna/get-property-read (property &optional marker default)
+  (read (ledna/get-property property marker default)))
 
 (defun ledna/get-title (&optional target default)
   (ledna/get-property "ITEM" target default))
 
-(defun ledna/next-allowed-value (property)
-  (let* ((prop-value (ledna/get-property property)))
-    (save-window-excursion
-      (save-excursion
-        ;; Jump to the property line, (required for `org-property-next-allowed-value')
-        (re-search-forward (org-re-property property nil nil prop-value))
-        (org-property-next-allowed-value prop-value)))))
+(defun -ledna/next-value (allowed &optional current)
+  (loop for item in allowed with a = -1
+        if (or (string= current item)
+               (> a -1))
+        do (setq a (1+ a))
+        if (= a 1) return item
+        finally (return (car allowed))))
 
-(defun ledna/circ-property (property limit &optional inc)
-  (let ((i (string-to-number (ledna/get-property property))))
-    (ledna/set-property property (% (+ i (or inc 1)) limit))))
+(defun ledna/switch-to-next-allowed-value (property &optional marker)
+  (loop for mark in (ledna/markers marker)
+        with current = (ledna/get-property property mark)
+        with allowed = (org-property-get-allowed-values mark property)
+        when allowed
+        do (ledna/set-property property (-ledna/next-value allowed current) mark)))
+
+(defun ledna/cycle-props (props)
+  (ledna/map #'(lambda () (mapc 'ledna/switch-to-next-allowed-value props))))
 
 (defun ledna/inc-property (property &optional val units marker)
   (loop for mark in (ledna/markers marker)
@@ -368,26 +377,26 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
             (org-clock-update-time-maybe)))))))
 
 (defun ledna/advanced-schedule (&optional target)
-  (when-let (schedule-prop (ledna/get-property ledna-props-schedule))
-    (let* ((schedule (cadr (read schedule-prop)))
-           (next-time (get-nearest-date schedule)))
-      (set-scheduled next-time target)
-      (ledna/set-todo-state "TODO" target)
-      (org-entry-put nil "LAST_REPEAT" (format-time-string
-					      (org-time-stamp-format t t)
-					      (current-time))))))
+  (let* ((schedule (ledna/get-property-read ledna-props-schedule))
+         (next-time (ledna/get-nearest-date schedule)))
+    (ledna/set-scheduled next-time target)
+    (ledna/set-todo-state "TODO" target)
+    (org-entry-put nil "LAST_REPEAT" (format-time-string
+				      (org-time-stamp-format t t)
+				      (current-time)))))
 
-(defun get-nearest-date (times)
-  (cl-flet* ((diff (time)
-                   (let* ((current-sec (time-to-seconds (org-current-time)))
-                          (target-sec (org-time-string-to-seconds (active-timestamp time)))
-                          (diff-sec (- target-sec current-sec)))
-                     (cond ((and (> diff-sec 0) (< diff-sec 604800)) diff-sec)
-                           ((< diff-sec 0) (+ diff-sec 604800))
-                           ((> diff-sec 604800) (- diff-sec 604800)))))
-             (comparator (a b) (< (diff a) (diff b))))
-    (let ((nearest-date (car (sort times #'comparator))))
-      nearest-date)))
+(defun ledna/get-nearest-date (times)
+  (let* ((current-sec (time-to-seconds (org-current-time))))
+    (cl-flet* ((diff (time)
+      (let* ((target-sec (org-time-string-to-seconds (active-timestamp time)))
+             (diff-sec (- target-sec current-sec)))
+        (cond ((and (> diff-sec 0) (< diff-sec 604800)) diff-sec)
+              ((< diff-sec 0) (+ diff-sec 604800))
+              ((> diff-sec 604800) (- diff-sec 604800)))))
+               (comparator (a b) (< (diff a) (diff b))))
+    (let ((times* (sort times #'comparator)))
+      (cond ((arrayp times*) (elt times* 0))
+            ((listp times*) (car times*)))))))
 
 (defun active-timestamp (str)
   (let* ((default-time (org-current-time))
@@ -403,7 +412,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
          (encoded-time (apply #'encode-time analyzed-time)))
     (format-time-string (org-time-stamp-format t t) encoded-time)))
 
-(defun set-scheduled (timestamp &optional marker)
+(defun ledna/set-scheduled (timestamp &optional marker)
   (let ((mark (or marker (ledna/$self))))
     (save-mark-and-excursion
      (cl-labels
@@ -416,7 +425,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
     (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
-(defun set-deadline (timestamp &optional marker)
+(defun ledna/set-deadline (timestamp &optional marker)
   (let ((mark (or marker (ledna/$self))))
     (save-mark-and-excursion
      (cl-labels
@@ -429,7 +438,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
-(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry if t" ":__ARCHIVE?: t") ("ledna-props-kill" "__KILL?" "bool" "Kill entry if t" ":__KILL?: t") ("ledna-props-cleanup" "__CLEANUP?" "bool or list<string>" "Delete entry props if t or props specified" ":__CLEANUP?: '(\"_PRICE\" \"_PASSED\" \"_COUNT\")")))))
+(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry if t" ":__ARCHIVE?: t") ("ledna-props-kill" "__KILL?" "bool" "Kill entry if t" ":__KILL?: t") ("ledna-props-cleanup" "__CLEANUP?" "bool or list<string>" "Delete entry props if t or props specified" ":__CLEANUP?: '(\"_PRICE\" \"_PASSED\" \"_COUNT\")") ("ledna-props-cycle" "__CYCLE" "list<string>" "Cycle prop values over allowed in PROP_ALL header" ":__CYCLE: '(\"MONTH\" \"TRAIN_TYPE\")")))))
 (loop for (symbol name type descr example) in ledna-reserved-properties
       do (eval (macroexpand (list 'defconst (intern symbol) name
                                   (format "%s. Type = %s." descr type)))))
@@ -445,6 +454,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
         ;; Constructors
         (  Advanced_Schedule ((->TODO     (ledna/advanced-schedule)))                        1)
+        (  Cycle_Props       ((->TODO     (ledna/cycle-props (ledna/get-property-read ledna-props-cycle)))) 1)
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
 
         ;; Destructors
@@ -486,7 +496,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
         (  Repeated_Task     ( Advanced_Schedule
                                Clone Cleanup Effort_Clock Counter
                                Rename Hometask_Deadline Archive_Maybe
-                               Forget_Unnecessary))
+                               Forget_Unnecessary Cycle_Props))
         (  Reminder          ( Advanced_Schedule Clone Kill))))
 
 (defun ledna/tags-prioritized (tags)
@@ -529,11 +539,10 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 
 (defun set-hometask-deadline ()
   (when (ledna/get-property ledna-props-hometask)
-    (when-let (hometask-entries (select (tags (ledna/get-property ledna-props-hometask))))
-    (when-let (schedule-prop (ledna/get-property ledna-props-schedule))
-      (let* ((schedule (cadr (read schedule-prop)))
-             (next-time (get-nearest-date schedule)))
-        (set-deadline next-time hometask-entries))))))
+    (let* ((hometask-entries (select (tags (ledna/get-property ledna-props-hometask))))
+          (schedule (ledna/get-property-read ledna-props-schedule))
+          (next-time (ledna/get-nearest-date schedule)))
+      (ledna/set-deadline next-time hometask-entries))))
 
 (defmacro ledna-counter (countable counter &optional target unit)
   `(when-let (inc (cond ((stringp ,countable) (ledna/get-property ,countable ,target))
@@ -550,7 +559,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
   (ledna-counter 1 "Times" target "times"))
 
 (defun ledna-touch (&optional target)
-  (set-scheduled (active-timestamp "now") target)
+  (ledna/set-scheduled (active-timestamp "now") target)
   (ledna/set-todo-state "TODO" target))
 
 (defun ledna-money-time-report (&optional target)
