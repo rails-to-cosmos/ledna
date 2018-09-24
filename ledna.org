@@ -699,10 +699,26 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 #+END_SRC
 * Todos [1/3]
 ** TODO watercourse
-(wat ++ index)
-(wat $ parent)
-(wat << type)
-(wat type >> "hello")
+#+BEGIN_SRC lisp
+(wat ++ index) ;; ++index, index++
+
+;; $ means selector
+(wat $ )
+(wat $ :rel parent) ;; self, children
+(wat $ :id "HELLO")
+(wat $ :tag [tag1 tag2 tag3])
+
+;; as sql?
+(wat [$|select] [from this-file|agenda|...]
+     [where] [rel|id|tag|prop] [=|in|...] value
+     [and|or|...] [...])
+
+(wat << type) ;; return type property
+(wat from self
+     do something
+     return anything) ;; as loop macro?
+(wat type >> "hello") ;; set type property to "hello"
+#+END_SRC
 
 ** DONE Support [[http://www.nongnu.org/org-edna-el/][edna]] set-property (’inc, ’dec, ’previous, and ’next as values)
 CLOSED: [2018-09-24 Mon 11:49]
