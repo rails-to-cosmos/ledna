@@ -471,13 +471,13 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 **** Nearest scheduling
 #+BEGIN_SRC emacs-lisp
 (defun ledna/advanced-schedule (&optional target)
-  (let* ((schedule (ledna/get-property-read ledna-props-schedule))
-         (next-time (ledna/get-nearest-date schedule)))
-    (ledna/set-scheduled next-time target)
-    (ledna/set-todo-state "TODO" target)
-    (org-entry-put nil "LAST_REPEAT" (format-time-string
-				      (org-time-stamp-format t t)
-				      (current-time)))))
+  (when-let (schedule (ledna/get-property-read ledna-props-schedule))
+    (let ((next-time (ledna/get-nearest-date schedule)))
+      (ledna/set-scheduled next-time target)
+      (ledna/set-todo-state "TODO" target)
+      (org-entry-put nil "LAST_REPEAT" (format-time-string
+				        (org-time-stamp-format t t)
+				        (current-time))))))
 
 (defun ledna/get-nearest-date (times)
   (let ((current-sec (time-to-seconds (org-current-time))))
