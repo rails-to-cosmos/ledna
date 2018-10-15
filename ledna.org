@@ -1,6 +1,9 @@
 #+CATEGORY: ledna
 #+PROPERTY: header-args:emacs-lisp :tangle ledna.el
 
+* TODO Make it on top of org-element API
+(org-element-parse-buffer)
+
 * Documentation
 ** Property prefix rules
 | Prefix | Description        |
