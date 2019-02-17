@@ -1,3 +1,35 @@
+;;; ledna.el --- try to make edna more flexible and familiar to emacs-lisp developers
+
+;; Copyright (C) 2019 Dmitry Akatov
+
+;; Author: Dmitry Akatov <akatovda@yandex.com>
+;; Created: 17 Feb 2019
+;; Version: 0.1
+
+;; Keywords: org babel
+;; Homepage: https://github.com/rails-to-cosmos/org-literate-devtools
+
+;; This file is not part of GNU Emacs.
+
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;; This package allows you to manage bookmarks and travel around the
+;; digital world with an org-mode power behind your shoulders.
+
+;;; Code:
+
 (defun ledna/eval-forms (forms)
   (unwind-protect
       (mapc #'(lambda (f) (when f (eval (read f)))) forms)
@@ -325,24 +357,16 @@ Each ID is a UUID as understood by `org-id-find'.
 Note that in the edna syntax, the IDs don't need to be quoted."
   (mapcar (lambda (id) (org-id-find id 'marker)) ids))
 
-(defun tags (match-spec &optional scope skip)
+(defun ledna/search (match-spec &optional scope skip)
   "Find entries using Org matching.
 
-Edna Syntax: match(\"MATCH-SPEC\" SCOPE SKIP)
+Edna Syntax: ledna/search(\"MATCH-SPEC\" SCOPE SKIP)
 
 MATCH-SPEC may be any valid match string; it is passed straight
 into `org-map-entries'.
 
 SCOPE and SKIP are their counterparts in `org-map-entries'.
-SCOPE defaults to agenda, and SKIP defaults to nil.
-
-* TODO Test
-  :PROPERTIES:
-  :BLOCKER:  match(\"test&mine\" agenda)
-  :END:
-
-\"Test\" will block until all entries tagged \"test\" and
-\"mine\" in the agenda files are marked DONE."
+SCOPE defaults to agenda, and SKIP defaults to nil."
   (when match-spec
     (setq scope (or scope 'agenda))
     (org-map-entries
@@ -389,14 +413,13 @@ SCOPE defaults to agenda, and SKIP defaults to nil.
 (defun ledna/get-nearest-date (times)
   (let ((current-sec (time-to-seconds (org-current-time))))
     (cl-flet* ((diff (time)
-      (let* ((target-sec (org-time-string-to-seconds (active-timestamp time)))
-             (diff-sec (- target-sec current-sec)))
-        (cond ((and (> diff-sec 0) (< diff-sec 604800)) diff-sec)
-              ((< diff-sec 0) (+ diff-sec 604800))
-              ((> diff-sec 604800) (- diff-sec 604800)))))
+                     (let* ((target-sec (org-time-string-to-seconds (active-timestamp time)))
+                            (diff-sec (- target-sec current-sec)))
+                       (cond ((and (> diff-sec 0) (< diff-sec 604800)) diff-sec)
+                             ((< diff-sec 0) (+ diff-sec 604800))
+                             ((> diff-sec 604800) (- diff-sec 604800)))))
                (comparator (a b) (< (diff a) (diff b))))
-      (let ((times* (sort times #'comparator)))
-        (elt times* 0)))))
+      (elt (sort times #'comparator) 0))))
 
 (defun active-timestamp (str)
   (let* ((default-time (org-current-time))
