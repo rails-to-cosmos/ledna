@@ -517,7 +517,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 (setq ledna/complex-tags
       '(;; Complex tag         Features
         (  Repeated_Task     ( Advanced_Schedule
-                               Clone Cleanup Effort_Clock Counter
+                               Clone Cleanup Effort_Clock
                                Rename Hometask_Deadline Archive_Maybe
                                Forget_Unnecessary Cycle_Props))
         (  Reminder          ( Advanced_Schedule Clone Kill))))
