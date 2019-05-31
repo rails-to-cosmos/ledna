@@ -199,9 +199,9 @@ ORIG-FUN is a blocker function called with ARGS."
     markers))
 
 (defun ledna/defer (handler &optional marker timeout)
-  (run-with-timer (or timeout 5) nil
-                  #'(lambda (h s) (ledna/map h s))
-                  handler (ledna/mos marker)))
+  (run-with-idle-timer (or timeout 2) nil
+                       #'(lambda (h s) (ledna/map h s))
+                       handler (ledna/mos marker)))
 
 (defun ledna/map (handler &optional marker)
   (save-window-excursion
@@ -519,7 +519,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
                               (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
-        (  Advanced_Schedule ((*->DONE     (ledna/advanced-schedule)))                        1)
+        (  Advanced_Schedule ((*->DONE     (ledna/advanced-schedule))
+                              (*->CANCELLED     (ledna/advanced-schedule)))                  1)
         (  Cycle_Props       ((->TODO     (ledna/cycle-props (ledna/get-property-read ledna-props-cycle)))) 1)
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
 
@@ -553,14 +554,14 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
         (  Kill              ((*->DONE      (ledna/defer 'ledna/org-kill-subtree))
                               (*->CANCELLED (ledna/defer 'ledna/org-kill-subtree)))          1001)
 
-        (  Archive_Me        ((*->DONE      (ledna/defer 'org-archive-subtree))
+        (  Archive           ((*->DONE      (ledna/defer 'org-archive-subtree))
                               (*->CANCELLED (ledna/defer 'org-archive-subtree)))             1001)))
 
 (setq ledna/complex-tags
       '(;; Complex tag         Features
         (  Repeated_Task     ( Advanced_Schedule Effort_Clock
                                Rename Forget_Unnecessary Cycle_Props))
-        (  Reminder          ( Advanced_Schedule Clone Kill))))
+        (  Reminder          ( Advanced_Schedule Kill))))
 
 (defun ledna/tags-prioritized (tags)
   (loop for (name (status header) priority)
