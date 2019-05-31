@@ -519,7 +519,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
                               (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
-        (  Advanced_Schedule ((->TODO     (ledna/advanced-schedule)))                        1)
+        (  Advanced_Schedule ((*->DONE     (ledna/advanced-schedule)))                        1)
         (  Cycle_Props       ((->TODO     (ledna/cycle-props (ledna/get-property-read ledna-props-cycle)))) 1)
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
 
