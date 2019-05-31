@@ -403,12 +403,55 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 
 (defun ledna/advanced-schedule (&optional target)
   (when-let (schedule (ledna/get-property-read ledna-props-schedule))
-    (let ((next-time (ledna/get-nearest-date schedule)))
+    (let ((next-time (ledna/get-nearest-date schedule))
+          (org-last-state (ledna/get-todo-state target))
+          (todo-word "TODO")
+          (done-word "DONE"))
+
+      (when (or org-log-repeat
+		(catch :clock
+		  (save-excursion
+		    (while (re-search-forward org-clock-line-re end t)
+		      (when (org-at-clock-log-p) (throw :clock t))))))
+	(org-entry-put nil "LAST_REPEAT" (format-time-string
+					  (org-time-stamp-format t t))))
+
+      (when org-log-repeat
+	(if (or (memq 'org-add-log-note (default-value 'post-command-hook))
+		(memq 'org-add-log-note post-command-hook))
+	    ;; We are already setup for some record.
+	    (when (eq org-log-repeat 'note)
+	      ;; Make sure we take a note, not only a time stamp.
+	      (setq org-log-note-how 'note))
+	  ;; Set up for taking a record.
+	  (org-add-log-setup 'state
+			     (or done-word (car org-done-keywords))
+			     org-last-state
+			     org-log-repeat)))
+
+      (when org-log-repeat
+	(if (or (memq 'org-add-log-note (default-value 'post-command-hook))
+		(memq 'org-add-log-note post-command-hook))
+	    ;; We are already setup for some record.
+	    (when (eq org-log-repeat 'note)
+	      ;; Make sure we take a note, not only a time stamp.
+	      (setq org-log-note-how 'note))
+	  ;; Set up for taking a record.
+	  (org-add-log-setup 'state
+			     (or done-word (car org-done-keywords))
+			     org-last-state
+			     org-log-repeat)))
+
+      ;; Time-stamps without a repeater are usually skipped.  However,
+      ;; a SCHEDULED time-stamp without one is removed, as they are no
+      ;; longer relevant.
+      (save-excursion
+	(let ((scheduled (org-entry-get (point) "SCHEDULED")))
+	  (when (and scheduled (not (string-match-p org-repeat-re scheduled)))
+	    (org-remove-timestamp-with-keyword org-scheduled-string))))
+
       (ledna/set-scheduled next-time target)
-      (ledna/set-todo-state "TODO" target)
-      (org-entry-put nil "LAST_REPEAT" (format-time-string
-				        (org-time-stamp-format t t)
-				        (current-time))))))
+      (ledna/set-todo-state todo-word target))))
 
 (defun ledna/get-nearest-date (times)
   (let ((current-sec (time-to-seconds (org-current-time))))
@@ -461,7 +504,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
                              ts))))
       (mapcar #'set-scheduled-on (-zip mark (-repeat (length mark) timestamp)))))))
 
-(let ((ledna-reserved-properties (quote (("ledna-props-count" "_COUNT" "int" "Default counter property" ":_COUNT: 1") ("ledna-props-schedule" "__SCHEDULE" "list<string>" "Describe repeated scheduling" ":__SCHEDULE: '(\"Mon 15:00\" \"Wed 17:00\" \"Fri 18:00\")") ("ledna-props-template" "__TEMPLATE" "string" "Header prototype template" ":__TEMPLATE: ${ledna-times} English class") ("ledna-props-hometask" "$HOMETASK" "string" "Hometask selector" ":$HOMETASK: Homework+CATEGORY=\"English\"") ("ledna-props-archive" "__ARCHIVE?" "bool" "Archive entry if t" ":__ARCHIVE?: t") ("ledna-props-kill" "__KILL?" "bool" "Kill entry if t" ":__KILL?: t") ("ledna-props-cleanup" "__CLEANUP?" "bool or list<string>" "Delete entry props if t or props specified" ":__CLEANUP?: '(\"_PRICE\" \"_PASSED\" \"_COUNT\")") ("ledna-props-cycle" "__CYCLE" "list<string>" "Cycle prop values over allowed in PROP_ALL header" ":__CYCLE: '(\"MONTH\" \"TRAIN_TYPE\")")))))
+(let ((ledna-reserved-properties (quote (("ledna-props-count" "DONE_COUNT" "int" "Default counter property" 1) ("ledna-props-schedule" "ADVANCED_SCHEDULE" "list<string>" "Describe repeated scheduling" "[\"Mon 15:00\" \"Wed\" \"Fri 18:00\"]") ("ledna-props-template" "HEADLINE_TEMPLATE" "string" "Header prototype template" "${ledna-times} English class") ("ledna-props-archive" "ARCHIVE_ENTRY_P" "bool" "Archive entry if t" "t") ("ledna-props-kill" "KILL_ENTRY_P" "bool" "Kill entry if t" "t") ("ledna-props-cleanup" "CLEANUP_ENTRY_PROPS_P" "bool or list<string>" "Delete entry props if t or props specified" "'(\"_PRICE\" \"_PASSED\" \"_COUNT\")") ("ledna-props-cycle" "CYCLE_ENTRY_PROPS_P" "list<string>" "Cycle prop values over allowed in PROP_ALL header" "'(\"MONTH\" \"TRAIN_TYPE\")")))))
 (loop for (symbol name type descr example) in ledna-reserved-properties
       do (eval (macroexpand (list 'defconst (intern symbol) name
                                   (format "%s. Type = %s." descr type)))))
@@ -481,7 +524,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
         (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
 
         ;; Destructors
-        (  Hometask_Deadline ((*->DONE      (set-hometask-deadline)))                        1)
         (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
 
         ;; Uncertain destructors
@@ -516,10 +558,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 
 (setq ledna/complex-tags
       '(;; Complex tag         Features
-        (  Repeated_Task     ( Advanced_Schedule
-                               Clone Cleanup Effort_Clock
-                               Rename Hometask_Deadline Archive_Maybe
-                               Forget_Unnecessary Cycle_Props))
+        (  Repeated_Task     ( Advanced_Schedule Effort_Clock
+                               Rename Forget_Unnecessary Cycle_Props))
         (  Reminder          ( Advanced_Schedule Clone Kill))))
 
 (defun ledna/tags-prioritized (tags)
@@ -558,13 +598,6 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 (defun ledna/archive-subtree-maybe-defer ()
   (when (string= (ledna/get-property ledna-props-archive) "t")
     (ledna/defer #'org-archive-subtree)))
-
-(defun set-hometask-deadline ()
-  (when (ledna/get-property ledna-props-hometask)
-    (let* ((hometask-entries (select (tags (ledna/get-property ledna-props-hometask))))
-          (schedule (ledna/get-property-read ledna-props-schedule))
-          (next-time (ledna/get-nearest-date schedule)))
-      (ledna/set-deadline next-time hometask-entries))))
 
 (defmacro ledna-counter (countable counter &optional target unit)
   `(when-let (inc (cond ((stringp ,countable) (ledna/get-property ,countable ,target))
