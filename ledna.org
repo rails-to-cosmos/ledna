@@ -620,8 +620,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 | ledna-props-template | HEADLINE_TEMPLATE     | string               | Header prototype template                         | ${ledna-times} English class    |
 | ledna-props-archive  | ARCHIVE_ENTRY_P       | bool                 | Archive entry if t                                | t                               |
 | ledna-props-kill     | KILL_ENTRY_P          | bool                 | Kill entry if t                                   | t                               |
-| ledna-props-cleanup  | CLEANUP_ENTRY_PROPS_P | bool or list<string> | Delete entry props if t or props specified        | '("_PRICE" "_PASSED" "_COUNT")  |
-| ledna-props-cycle    | CYCLE_ENTRY_PROPS_P   | list<string>         | Cycle prop values over allowed in PROP_ALL header | '("MONTH" "TRAIN_TYPE")         |
+| ledna-props-cleanup  | CLEANUP_ENTRY_PROPS   | bool or list<string> | Delete entry props if t or props specified        | '("_PRICE" "_PASSED" "_COUNT")  |
+| ledna-props-cycle    | CYCLE_ENTRY_PROPS     | list<string>         | Cycle prop values over allowed in PROP_ALL header | '("MONTH" "TRAIN_TYPE")         |
 #+TBLFM:
 
 #+NAME: ob-ledna-define-constants
