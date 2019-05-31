@@ -48,9 +48,7 @@
     mt-priority))
 
 (defun apply-ledna-forms (entry-keys pom)
-  (ledna-run change-plist
-
-    (let (entry-props-evaled-p
+  (let (entry-props-evaled-p
           (mtags-list (ledna/magic-tags-list))
           (cpx-tags-list (ledna/complex-tags-list))
           (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
@@ -80,7 +78,7 @@
 
       ;; Process user properties
       (when (and entry-vals (not entry-props-evaled-p))
-        (ledna/eval-forms entry-vals)))))
+        (ledna/eval-forms entry-vals))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -154,34 +152,21 @@ If the TODO state is changing from a TODO state to a DONE state, run BODY."
           nil))
      t))
 
-(defun ledna-dsl-init (&optional dsl)
-  (let ((dsl (or dsl 'ledna)))
-    (defvar ledna-dsl dsl "Language that edna uses for triggers and blockers.")
-    (defvar ledna-dsl-trigger-handler "Org-edna custom trigger wrapper.")
-    (defvar ledna-dsl-blocker-handler "Org-edna custom blocker wrapper.")
-
-    (setq-default ledna-dsl dsl
-                  ledna-dsl-trigger-handler (case dsl
-                                              ('ledna #'ledna-trigger-function)
-                                              ('emacs-lisp #'ledna-trigger-function-emacs-lisp))
-                  ledna-dsl-blocker-handler (case dsl
-                                              ('ledna #'ledna-blocker-function)
-                                              ('emacs-lisp #'ledna-blocker-function-emacs-lisp)))
-
-    (advice-add 'org-edna-trigger-function :around #'ledna-dsl-specifier-trigger)
-    (advice-add 'org-edna-blocker-function :around #'ledna-dsl-specifier-blocker)))
+(defun ledna-dsl-init ()
+  (advice-add 'org-edna-trigger-function :around #'ledna-dsl-specifier-trigger)
+  (advice-add 'org-edna-blocker-function :around #'ledna-dsl-specifier-blocker))
 
 (defun ledna-dsl-specifier-trigger (orig-fun &rest args)
   "Wrap edna's triggers.
 
 ORIG-FUN is a trigger function called with ARGS."
-  (apply ledna-dsl-trigger-handler args))
+  (apply #'ledna-trigger-function-emacs-lisp args))
 
 (defun ledna-dsl-specifier-blocker (orig-fun &rest args)
   "Wrap edna's blockers.
 
 ORIG-FUN is a blocker function called with ARGS."
-  (apply ledna-dsl-blocker-handler args))
+  (apply #'ledna-blocker-function-emacs-lisp args))
 
 ;; one or many
 (defun ledna/oom (items)
@@ -211,7 +196,7 @@ ORIG-FUN is a blocker function called with ARGS."
                       (org-goto-marker-or-bmk mark)
                       (funcall handler))
             finally (progn
-                      (org-align-all-tags)
+                      (org-align-tags t)
                       (org-update-checkbox-count))))))
 
 (defun string-is-numeric-p (string)
@@ -253,7 +238,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
              (src-props             (org-entry-properties))
              (src-props-std         (org-entry-properties nil 'standard))
              (src-props-std-keys    (mapcar #'car src-props-std))
-             (src-tags-string       (org-get-tags-string))
+             (src-tags-string       (org-make-tag-string (org-get-tags nil t)))
              (todo-state            (or (plist-get args :todo-state)   "TODO"))
              (target-props          (or (plist-get args :properties)   src-props-std-keys)))
 
@@ -269,7 +254,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
               target-props)
 
         (ledna/set-todo-state todo-state))
-      (org-align-all-tags)
+      (org-align-tags t)
       (org-update-checkbox-count))))
 
 (defun ledna/set-property (property value &optional marker)
@@ -390,7 +375,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
           (org-indent-line)
           (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
             (beginning-of-line 1)
-            (indent-line-to (- (org-get-indentation) 2)))
+            (indent-line-to (- (current-indentation) 2)))
           (insert org-clock-string " ")
 
           (let ((scheduled-time (org-get-scheduled-time (org-entry-beginning-position))))
@@ -406,7 +391,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
     (let ((next-time (ledna/get-nearest-date schedule))
           (org-last-state (ledna/get-todo-state target))
           (todo-word "TODO")
-          (done-word "DONE"))
+          (done-word "DONE")
+          (end (copy-marker (org-entry-end-position))))
 
       (when (or org-log-repeat
 		(catch :clock
