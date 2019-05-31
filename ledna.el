@@ -39,46 +39,55 @@
   (remove 'nil (mapcar #'(lambda (f) (org-entry-get pom f org-edna-use-inheritance)) keys)))
 
 (defun ledna/apply-magic-tag (tag keys)
-  (let* ((mt-params (alist-get tag ledna/magic-tags))
-         (mt-priority (cadr mt-params))
-         (mt-props (car mt-params)))
+  (let* ((params (alist-get tag ledna/magic-tags))
+         (priority (cadr params))
+         (props (car params)))
     (loop for key in keys
-          do (when-let (magic-form (car (alist-get (intern key) mt-props)))
+          do (when-let (magic-form (car (alist-get (intern key) props)))
                (eval magic-form)))
-    mt-priority))
+    priority))
+
+(defun ledna--apply-magic-tag-consider-priority (tag priority keys vals &optional entry-props-evaled-p)
+  (let (result)
+    (when (and vals (not entry-props-evaled-p) (>= priority 100))
+      (ledna/eval-forms vals)
+      (setq result t))
+    (ledna/apply-magic-tag tag keys)
+    (or result entry-props-evaled-p)))
 
 (defun apply-ledna-forms (entry-keys pom)
   (let (entry-props-evaled-p
-          (mtags-list (ledna/magic-tags-list))
-          (cpx-tags-list (ledna/complex-tags-list))
-          (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
-          (src-org-tags (mapcar #'intern (org-get-tags))))
+        (mtags-list (ledna/magic-tags-list))
+        (cpx-tags-list (ledna/complex-tags-list))
+        (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
+        (src-org-tags (mapcar #'intern (org-get-tags))))
 
-      (cl-flet ((apply-magic-tag-consider-priority (tag priority keys vals)
-                  (progn
-                    (when (and entry-vals (not entry-props-evaled-p) (>= priority 100))
-                      (ledna/eval-forms vals)
-                      (setq entry-props-evaled-p t))
-                    (ledna/apply-magic-tag tag keys))))
+      ;; Process complex tags
+      (dolist (src-tag src-org-tags)
+        (when (member src-tag cpx-tags-list)
+          (let* ((sm-tags (car (alist-get src-tag ledna/complex-tags))))
+            (loop for (tag priority)
+                  in (ledna/tags-prioritized mtags-list)
+                  when (member tag sm-tags)
+                  do (setq entry-props-evaled-p
+                           (ledna--apply-magic-tag-consider-priority
+                            tag priority
+                            entry-keys entry-vals
+                            entry-props-evaled-p))))))
 
-        ;; Process complex tags
-        (dolist (src-tag src-org-tags)
-          (when (member src-tag cpx-tags-list)
-            (let* ((sm-tags (car (alist-get src-tag ledna/complex-tags))))
-              (loop for (tag priority)
-                    in (ledna/tags-prioritized mtags-list)
-                    when (member tag sm-tags)
-                    do (apply-magic-tag-consider-priority tag priority entry-keys entry-vals)))))
+      ;; Process simple tags (minor copy-paste)
+      (loop for (tag priority)
+            in (ledna/tags-prioritized mtags-list)
+            when (member tag src-org-tags)
+            do (setq entry-props-evaled-p
+                     (ledna--apply-magic-tag-consider-priority
+                      tag priority
+                      entry-keys entry-vals
+                      entry-props-evaled-p)))
 
-        ;; Process simple tags (minor copy-paste)
-        (loop for (tag priority)
-              in (ledna/tags-prioritized mtags-list)
-              when (member tag src-org-tags)
-              do (apply-magic-tag-consider-priority tag priority entry-keys entry-vals)))
-
-      ;; Process user properties
-      (when (and entry-vals (not entry-props-evaled-p))
-        (ledna/eval-forms entry-vals))))
+    ;; Process user properties
+    (when (and entry-vals (not entry-props-evaled-p))
+      (ledna/eval-forms entry-vals))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -293,7 +302,8 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         do (ledna/set-property property (-ledna/next-value allowed current) mark)))
 
 (defun ledna/cycle-props (props)
-  (ledna/map #'(lambda () (mapc 'ledna/switch-to-next-allowed-value props))))
+  (let ((props (ledna/get-property-read ledna-props-cycle)))
+    (ledna/map #'(lambda () (mapc 'ledna/switch-to-next-allowed-value props)))))
 
 (defun ledna/inc-property (property &optional val units marker)
   (loop for mark in (ledna/markers marker)
@@ -496,6 +506,10 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
                                   (format "%s. Type = %s." descr type)))))
 )
 
+(defun ledna/ensure-prop (prop)
+  (unless (org-entry-get nil prop)
+    (org-set-property prop (read-string (format "Set %s: " prop)))))
+
 ;; priority list of magic tags
 ;; greater priorities mean latter execution
 (setq ledna/magic-tags
@@ -505,22 +519,23 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
                               (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
-        (  Advanced_Schedule ((*->DONE     (ledna/advanced-schedule))
-                              (*->CANCELLED     (ledna/advanced-schedule)))                  1)
-        (  Cycle_Props       ((->TODO     (ledna/cycle-props (ledna/get-property-read ledna-props-cycle)))) 1)
-        (  Rename            ((->TODO     (ledna-entry-name-from-template)))                 1)
+        (  Advanced_Schedule ((*->DONE      (ledna/advanced-schedule))
+                              (*->CANCELLED (ledna/advanced-schedule))
+                              (+Advanced_Schedule (ledna/ensure-prop "ADVANCED_SCHEDULE")))  1)
+        (  Cycle_Props       ((->TODO       (ledna/cycle-props)))                            1)
+        (  Rename            ((->TODO       (ledna-entry-name-from-template)))               1)
 
         ;; Destructors
         (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
 
         ;; Uncertain destructors
         (  Cleanup_Maybe      ((*->DONE      (ledna/cleanup-maybe-defer))
-                               (*->CANCELLED (ledna/cleanup-maybe-defer)))                    1)
+                               (*->CANCELLED (ledna/cleanup-maybe-defer)))                   1)
         (  Kill_Maybe         ((*->DONE      (ledna/kill-subtree-maybe-defer))
-                               (*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
-        (  Forget_Unnecessary ((*->CANCELLED (ledna/kill-subtree-maybe-defer)))               1)
+                               (*->CANCELLED (ledna/kill-subtree-maybe-defer)))              1)
+        (  Forget_Unnecessary ((*->CANCELLED (ledna/kill-subtree-maybe-defer)))              1)
         (  Archive_Maybe      ((*->DONE      (ledna/archive-subtree-maybe-defer))
-                               (*->CANCELLED (ledna/archive-subtree-maybe-defer)))            1)
+                               (*->CANCELLED (ledna/archive-subtree-maybe-defer)))           1)
 
         ;; User-defined properties are executed with priority = 100
 
