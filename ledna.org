@@ -639,18 +639,18 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 (setq ledna/magic-tags
       '(;; Tag                Status       Handler                               Priority
 
-        (  Pending_Inherit   ((*->PENDING (ledna/set-todo-state "PENDING" (ledna/$parent)))
-                              (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
+        ;; (  Pending_Inherit   ((*->PENDING (ledna/set-todo-state "PENDING" (ledna/$parent)))
+        ;;                       (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
         ;; Constructors
-        (  Advanced_Schedule ((*->DONE      (ledna/advanced-schedule))
-                              (*->CANCELLED (ledna/advanced-schedule))
-                              (+Advanced_Schedule (ledna/ensure-prop "ADVANCED_SCHEDULE")))  1)
         (  Cycle_Props       ((->TODO       (ledna/cycle-props)))                            1)
         (  Rename            ((->TODO       (ledna-entry-name-from-template)))               1)
 
         ;; Destructors
-        (  Effort_Clock      ((TODO->DONE   (ledna/consider-effort-as-clocktime)))           1)
+        (  Effort_Clock      ((*->DONE (ledna/consider-effort-as-clocktime)))                5)
+        (  Advanced_Schedule ((*->DONE      (ledna/advanced-schedule))
+                              (*->CANCELLED (ledna/advanced-schedule))
+                              (+Advanced_Schedule (ledna/ensure-prop "ADVANCED_SCHEDULE")))  10)
 
         ;; Uncertain destructors
         (  Cleanup_Maybe      ((*->DONE      (ledna/cleanup-maybe-defer))
