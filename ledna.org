@@ -377,7 +377,7 @@ Examples of valid numeric strings are \"1\", \"-3\", or \"123\"."
         when allowed
         do (ledna/set-property property (-ledna/next-value allowed current) mark)))
 
-(defun ledna/cycle-props (props)
+(defun ledna/cycle-props ()
   (let ((props (ledna/get-property-read ledna-props-cycle)))
     (ledna/map #'(lambda () (mapc 'ledna/switch-to-next-allowed-value props)))))
 #+END_SRC
