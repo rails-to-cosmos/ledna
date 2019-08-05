@@ -48,26 +48,30 @@
     priority))
 
 (defun ledna--apply-magic-tag-consider-priority (tag priority keys vals &optional entry-props-evaled-p)
-  (let (result)
-    (when (and vals (not entry-props-evaled-p) (>= priority 100))
-      (ledna/eval-forms vals)
-      (setq result t))
-    (ledna/apply-magic-tag tag keys)
-    (or result entry-props-evaled-p)))
+  (when (and vals
+             (not entry-props-evaled-p)
+             (>= priority 100))
+    (ledna/eval-forms vals)
+    (setq entry-props-evaled-p t))
+  (ledna/apply-magic-tag tag keys)
+  entry-props-evaled-p)
 
 (defun apply-ledna-forms (entry-keys pom)
-  (let (entry-props-evaled-p
-        (mtags-list (ledna/magic-tags-list))
-        (cpx-tags-list (ledna/complex-tags-list))
-        (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
-        (src-org-tags (mapcar #'intern (org-get-tags))))
+  (save-excursion
+    (org-goto-marker-or-bmk pom)
+
+    (let (entry-props-evaled-p
+          (magic-tags (ledna/magic-tags-list))
+          (complex-tags (ledna/complex-tags-list))
+          (entry-vals (ledna/get-entry-values-by-keys pom entry-keys))
+          (src-org-tags (mapcar #'intern (org-get-tags))))
 
       ;; Process complex tags
       (dolist (src-tag src-org-tags)
-        (when (member src-tag cpx-tags-list)
+        (when (member src-tag complex-tags)
           (let* ((sm-tags (car (alist-get src-tag ledna/complex-tags))))
             (loop for (tag priority)
-                  in (ledna/tags-prioritized mtags-list)
+                  in (ledna/tags-prioritized magic-tags)
                   when (member tag sm-tags)
                   do (setq entry-props-evaled-p
                            (ledna--apply-magic-tag-consider-priority
@@ -77,7 +81,7 @@
 
       ;; Process simple tags (minor copy-paste)
       (loop for (tag priority)
-            in (ledna/tags-prioritized mtags-list)
+            in (ledna/tags-prioritized magic-tags)
             when (member tag src-org-tags)
             do (setq entry-props-evaled-p
                      (ledna--apply-magic-tag-consider-priority
@@ -85,9 +89,9 @@
                       entry-keys entry-vals
                       entry-props-evaled-p)))
 
-    ;; Process user properties
-    (when (and entry-vals (not entry-props-evaled-p))
-      (ledna/eval-forms entry-vals))))
+      ;; Process user properties
+      (when (and entry-vals (not entry-props-evaled-p))
+        (ledna/eval-forms entry-vals)))))
 
 (defun ledna-trigger-function-emacs-lisp (change-plist)
   "Trigger function work-horse.
@@ -96,7 +100,6 @@ See `org-edna-run' for CHANGE-PLIST explanation.
 
 This shouldn't be run from outside of `org-trigger-hook'."
   (let* ((pos (plist-get change-plist :position))
-         (type (plist-get change-plist :type))
 
          (to* (or (plist-get change-plist :to) ""))
          (from* (or (plist-get change-plist :from) ""))
@@ -374,27 +377,42 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 ;; (select (ids "test-pass-purchased-p") (tags "test_tag"))
 ;; TODO (select :ids '(test-pass-purchased-p) :tags '(test_tag))
 
-(defun ledna/consider-effort-as-clocktime ()
-  (if-let (entry-effort (ledna/get-property "EFFORT"))
-      (save-window-excursion
-        (save-excursion
-          (save-restriction
-          (org-clock-find-position org-clock-in-resume)
-          (insert-before-markers "\n")
-          (backward-char 1)
-          (org-indent-line)
-          (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
-            (beginning-of-line 1)
-            (indent-line-to (- (current-indentation) 2)))
-          (insert org-clock-string " ")
+(defun clocktime-from-timestamp-or-effort ()
+  (let* ((timestamp (save-excursion
+                      (org-back-to-heading)
+                      (re-search-forward org-element--timestamp-regexp
+                                         (org-entry-end-position))
+                      (goto-char (match-beginning 0))
+                      (org-element-timestamp-parser)))
+         (start-time (org-timestamp-to-time timestamp))
+         (end-time (org-timestamp-to-time timestamp t))
+         (effort (/ (float-time (time-subtract end-time start-time)) 60)))
 
-          (let ((scheduled-time (org-get-scheduled-time (org-entry-beginning-position))))
-            (org-insert-time-stamp scheduled-time 'with-hm 'inactive)
-            (insert "--")
-            (org-insert-time-stamp (seconds-to-time (+ (time-to-seconds scheduled-time)
-                                                       (* (org-duration-to-minutes entry-effort) 60)))
-                                   'with-hm 'inactive)
-            (org-clock-update-time-maybe)))))))
+    (unless (> effort 0)
+      (setq effort (org-duration-to-minutes
+                    (or (ledna/get-property "EFFORT")
+                        (let ((user-effort (org-read-property-value "EFFORT")))
+                          (org-set-property "EFFORT" user-effort)
+                          user-effort))))
+      (setq end-time (seconds-to-time (+ (time-to-seconds start-time) (* effort 60)))))
+
+    (with-temp-buffer
+      (org-insert-time-stamp start-time 'with-hm 'inactive (concat org-clock-string " "))
+      (org-insert-time-stamp end-time 'with-hm 'inactive "--")
+      (org-clock-update-time-maybe)
+      (buffer-string))))
+
+(defun ledna/consider-effort-as-clocktime ()
+  (save-excursion
+    (let ((clocktime (clocktime-from-timestamp-or-effort)))
+      (org-clock-find-position t)
+      (insert-before-markers "\n")
+      (backward-char 1)
+      (org-indent-line)
+      (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
+        (beginning-of-line 1)
+        (indent-line-to (- (current-indentation) 2)))
+      (insert (clocktime-from-timestamp-or-effort)))))
 
 (defun ledna/advanced-schedule (&optional target)
   (when-let (schedule (ledna/get-property-read ledna-props-schedule))
@@ -518,6 +536,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
         ;; (  Pending_Inherit   ((*->PENDING (ledna/set-todo-state "PENDING" (ledna/$parent)))
         ;;                       (PENDING->* (ledna/set-todo-state "TODO"    (ledna/$parent)))) 1)
 
+        ;; (  *                  ((*->DONE     (ledna/consider-effort-as-clocktime)))           5)
+
         ;; Constructors
         (  Cycle_Props       ((->TODO       (ledna/cycle-props)))                            1)
         (  Rename            ((->TODO       (ledna-entry-name-from-template)))               1)
@@ -547,7 +567,7 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
                               (*->CANCELLED (ledna-clone)))                                  120)
 
         ;; Removing entry properties
-        ;; Warning! Tags with priority > 1000 won't have access to special properties
+        ;; Warning! Tags with priority > 1000 don't have access to special properties
         (  Cleanup           ((*->DONE      (ledna/cleanup-properties))
                               (*->CANCELLED (ledna/cleanup-properties)))                     1000)
 
