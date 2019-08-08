@@ -412,7 +412,9 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
       (when (and (save-excursion (end-of-line 0) (org-in-item-p)))
         (beginning-of-line 1)
         (indent-line-to (- (current-indentation) 2)))
-      (insert (clocktime-from-timestamp-or-effort)))))
+      (insert (clocktime-from-timestamp-or-effort))
+      (org-back-to-heading)
+      (org-set-tags (remove "Effort_Clock" (org-get-tags))))))
 
 (defun ledna/advanced-schedule (&optional target)
   (when-let (schedule (ledna/get-property-read ledna-props-schedule))
