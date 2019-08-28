@@ -780,7 +780,8 @@ SCOPE defaults to agenda, and SKIP defaults to nil."
 #+BEGIN_SRC emacs-lisp
 (provide 'ledna)
 #+END_SRC
-* Todos [1/3]
+* Todos [1/4]
+** TODO Create :LOGBOOK: if not found
 ** TODO watercourse
 #+BEGIN_SRC lisp
 (wat ++ index) ;; ++index, index++
